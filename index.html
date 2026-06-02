@@ -475,7 +475,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
         </div>
         <div class="form-group">
           <label class="form-label">Source / Store</label>
-          <input type="text" id="fSourceModal" class="form-input" placeholder="e.g. circuits-elec.com">
+          <select id="fSourceModal" class="form-select" onchange="syncBuyLabel()"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Qty *</label>
@@ -495,7 +495,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
         </div>
         <div class="form-group">
           <label class="form-label">Buy Button Label</label>
-          <input type="text" id="fBuyLabel" class="form-input" placeholder="e.g. 🟢 circuits-elec">
+          <select id="fBuyLabel" class="form-select"></select>
         </div>
         <div class="form-group" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
           <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
@@ -613,6 +613,22 @@ const _X = { // retired — buy_url / buy_label now live in Supabase
   66: {label:'🔨 Hardware',url:'',cls:'slate'}, 67: {label:'🔨 Hardware',url:'',cls:'slate'},
   68: {label:'🖨 Print shop',url:'',cls:'navy'},
 };
+
+const STORES = [
+  { source: 'circuits-elec.com',  label: '🟢 circuits-elec',    url: 'https://circuits-elec.com' },
+  { source: 'HD Electronics',     label: '🔵 HD Electronics',    url: 'https://hdelectronicseg.com' },
+  { source: 'RAM Electronics',    label: '🔵 RAM e-shop',        url: 'https://www.ram-e-shop.com' },
+  { source: 'uge-one.com',        label: '🟠 UGE Electronics',   url: 'https://uge-one.com' },
+  { source: 'microohm-eg.com',    label: '🔴 microohm-eg',       url: 'https://microohm-eg.com' },
+  { source: 'Attaba Market',      label: '🏪 Attaba Market',     url: '' },
+  { source: 'Hardware store',     label: '🔨 Hardware store',    url: '' },
+  { source: 'Pharmacy',           label: '💊 Pharmacy',          url: '' },
+  { source: 'Supermarket',        label: '🛒 Supermarket',       url: '' },
+  { source: 'Stationery',         label: '📝 Stationery',        url: '' },
+  { source: 'Home store',         label: '🏠 Home store',        url: '' },
+  { source: 'Print shop',         label: '🖨 Print shop',        url: '' },
+  { source: 'Already owned',      label: '✅ Owned',             url: '' },
+];
 
 const SOURCE_GROUPS = [
   { value:'circuits', label:'🟢 circuits-elec.com', match: s => /circuits/i.test(s) },
@@ -930,11 +946,33 @@ async function toggleBought(id, current) {
 /* ═══════════════════════════════════════════════════════
    CRUD — ADD / EDIT
 ═══════════════════════════════════════════════════════ */
+function populateStoreDropdowns(selectedSource, selectedLabel) {
+  const srcSel   = document.getElementById('fSourceModal');
+  const labelSel = document.getElementById('fBuyLabel');
+  const opts = STORES.map(s =>
+    `<option value="${e(s.source)}" data-label="${e(s.label)}">${e(s.source)}</option>`
+  ).join('');
+  const labelOpts = ['', ...STORES.map(s => s.label)].map(l =>
+    `<option value="${e(l)}">${l || '(none)'}</option>`
+  ).join('');
+  srcSel.innerHTML   = opts;
+  labelSel.innerHTML = labelOpts;
+  if (selectedSource) srcSel.value   = selectedSource;
+  if (selectedLabel)  labelSel.value = selectedLabel;
+}
+
+function syncBuyLabel() {
+  const src   = document.getElementById('fSourceModal').value;
+  const store = STORES.find(s => s.source === src);
+  if (store) document.getElementById('fBuyLabel').value = store.label;
+}
+
 function openAdd() {
   editId = null;
   document.getElementById('editTitle').textContent = 'Add Item';
   document.getElementById('saveBtn').textContent   = 'Add Item';
   document.getElementById('editForm').reset();
+  populateStoreDropdowns();
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -946,7 +984,7 @@ function openEdit(id) {
   document.getElementById('fDesc').value              = r.description||'';
   document.getElementById('fRef').value               = r.ref||'';
   document.getElementById('fCatInput').value          = r.category||'';
-  document.getElementById('fSourceModal').value       = r.source||'';
+  populateStoreDropdowns(r.source||'', r.buy_label||'');
   document.getElementById('fQty').value               = r.qty||1;
   document.getElementById('fPrice').value             = r.price||0;
   document.getElementById('fNotes').value             = r.notes||'';
@@ -966,7 +1004,7 @@ async function saveItem(ev) {
     description: document.getElementById('fDesc').value.trim(),
     ref:         document.getElementById('fRef').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
-    source:      document.getElementById('fSourceModal').value.trim(),
+    source:      document.getElementById('fSourceModal').value,
     qty:         parseInt(document.getElementById('fQty').value)||1,
     price:       parseFloat(document.getElementById('fPrice').value)||0,
     notes:       document.getElementById('fNotes').value.trim(),
