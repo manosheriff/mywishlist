@@ -657,7 +657,7 @@ let editId = null, delId = null;
 /* ═══════════════════════════════════════════════════════
    PIN + INIT
 ═══════════════════════════════════════════════════════ */
-const PIN = '1234'; // ← change this to your preferred 4-digit PIN
+const PIN = '1204';
 
 (function init() {
   setTheme(localStorage.getItem('bom-theme') || 'dark');
@@ -751,7 +751,7 @@ function disconnect() {
   sb = null; rows = [];
   localStorage.removeItem('bom-sb-url');
   localStorage.removeItem('bom-sb-key');
-  document.getElementById('setupState').style.display   = 'flex';
+  document.getElementById('pinState').style.display     = 'flex';
   document.getElementById('tabNav').style.display       = 'none';
   document.getElementById('dbBadge').style.display      = 'none';
   document.getElementById('importBtn').style.display    = 'none';
@@ -796,7 +796,7 @@ async function dbDelete(id) {
    SHOW APP
 ═══════════════════════════════════════════════════════ */
 function showApp(url) {
-  document.getElementById('setupState').style.display    = 'none';
+  document.getElementById('pinState').style.display      = 'none';
   document.getElementById('tabNav').style.display        = 'flex';
   document.getElementById('dbBadge').style.display = 'flex';
 
