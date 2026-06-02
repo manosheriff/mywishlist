@@ -551,10 +551,7 @@ create table if not exists bom_items (
 alter table bom_items enable row level security;
 create policy "allow_all" on bom_items for all using (true) with check (true);`;
 
-/* ═══════════════════════════════════════════════════════
-   BUY MAP  (pos → {label, url, cls})
-═══════════════════════════════════════════════════════ */
-const _REMOVED_BUY_MAP = { // buy links now stored in Supabase buy_url / buy_label columns
+const _X = { // retired — buy_url / buy_label now live in Supabase
   1:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/dc-motor-driver-bts7960-single-channel-43',              cls:'green'},
   2:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/drv8825-stepper-motor-driver',                           cls:'green'},
   3:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/atmega328p-avr-28-pin-20mhz-32k',                        cls:'green'},
@@ -874,7 +871,6 @@ function renderItems() {
   let n=0;
   document.getElementById('tableBody').innerHTML = items.map(r => {
     n++;
-    const bm = BUY_MAP[r.pos];
     return `<tr class="${r.bought?'is-bought':''}">
       <td class="col-chk"><div class="cb ${r.bought?'on':''}" onclick="toggleBought(${r.id},${r.bought})"></div></td>
       <td class="col-num">${n}</td>
