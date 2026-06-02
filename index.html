@@ -639,9 +639,11 @@ let editId = null, delId = null;
 ═══════════════════════════════════════════════════════ */
 (function init() {
   setTheme(localStorage.getItem('bom-theme') || 'dark');
-  const url = '__SUPABASE_URL__';
-  const key = '__SUPABASE_KEY__';
-  connect(url, key, true);
+  connect(
+    'https://yfyannlnmyegbhyorhly.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlmeWFubmxubXllZ2JoeW9yaGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDQzMDMsImV4cCI6MjA5NTkyMDMwM30.owws4Q2ywNDV-x0OK3zkCdz11jxDz_ygIbKAKGg4nnc',
+    true
+  );
 })();
 
 /* ═══════════════════════════════════════════════════════
