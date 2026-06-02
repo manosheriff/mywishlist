@@ -119,6 +119,25 @@ body{
 .btn-danger:hover{opacity:.85}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
 
+/* ── PIN SCREEN ─────────────────────────────────────────── */
+.pin-card{
+  text-align:center;background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:48px 40px;box-shadow:var(--shadow-lg);min-width:280px;
+}
+.pin-icon{font-size:44px;margin-bottom:16px}
+.pin-card h2{font-size:20px;font-weight:700;margin-bottom:4px}
+.pin-card > p{font-size:12.5px;color:var(--text3);margin-bottom:28px}
+.pin-inputs{display:flex;gap:12px;justify-content:center}
+.pin-digit{
+  width:52px;height:60px;text-align:center;font-size:24px;font-weight:700;
+  background:var(--surface2);border:2px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:monospace;transition:border .15s;outline:none;
+}
+.pin-digit:focus{border-color:var(--blue)}
+.pin-digit.filled{border-color:var(--green)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.pin-inputs.shake{animation:shake .4s ease}
+
 /* ── SETUP / EMPTY STATE ────────────────────────────────── */
 .page-empty{
   display:flex;align-items:center;justify-content:center;
@@ -340,7 +359,6 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <div class="db-dot" id="dbDot"></div>
       <span id="dbLabel">—</span>
     </div>
-    <button class="btn btn-ghost btn-sm" id="disconnectBtn" onclick="disconnect()" style="display:none" title="Disconnect">✕</button>
     <div class="theme-group">
       <button class="theme-btn active" data-theme="dark"  onclick="setTheme('dark')">Dark</button>
       <button class="theme-btn"        data-theme="light" onclick="setTheme('light')">Light</button>
@@ -352,30 +370,19 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 <!-- ── MAIN ────────────────────────────────────────────── -->
 <main class="app-main">
 
-<!-- SETUP ────────────────────────────────────────────── -->
-<div id="setupState" class="page-empty">
-  <div class="setup-card">
-    <div class="setup-icon">🗄️</div>
-    <h2>Connect to Supabase</h2>
-    <p>Enter your project details below. Your data lives in Supabase — nothing is stored locally.</p>
-    <div class="setup-fields">
-      <div class="form-group">
-        <label class="form-label">Project URL</label>
-        <input type="url" id="sbUrl" class="form-input" placeholder="https://xxxx.supabase.co" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Anon / Public Key</label>
-        <input type="text" id="sbKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off">
-      </div>
+<!-- PIN ──────────────────────────────────────────────── -->
+<div id="pinState" class="page-empty">
+  <div class="pin-card">
+    <div class="pin-icon">🔐</div>
+    <h2>Enter PIN</h2>
+    <p>4-digit access PIN</p>
+    <div class="pin-inputs" id="pinInputs">
+      <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]">
+      <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]">
+      <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]">
+      <input class="pin-digit" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]">
     </div>
-    <button class="btn btn-primary" id="connectBtn" onclick="connect()" style="width:100%;justify-content:center;padding:10px">
-      Connect
-    </button>
-    <div class="setup-hint">
-      <strong>First time?</strong> Run this SQL once in your Supabase <a onclick="copySchema()">→ copy schema SQL</a><br><br>
-      <code>Table: bom_items</code><br>
-      <code>Columns: id, pos, ref, description, category, source, qty, price, notes, critical, bought</code>
-    </div>
+    <p id="pinErr" style="color:var(--red);font-size:12px;min-height:18px;margin-top:8px"></p>
   </div>
 </div>
 
@@ -455,7 +462,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 </main>
 
 <!-- ── ADD / EDIT MODAL ──────────────────────────────── -->
-<div class="modal-overlay" id="editModal" onclick="closeEditIf(event)">
+<div class="modal-overlay" id="editModal">
   <div class="modal">
     <div class="modal-title" id="editTitle">Add Item</div>
     <form id="editForm" onsubmit="saveItem(event)">
@@ -495,7 +502,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
         </div>
         <div class="form-group">
           <label class="form-label">Buy Button Label</label>
-          <select id="fBuyLabel" class="form-select"></select>
+          <select id="fBuyLabel" class="form-select" onchange="syncSource()"></select>
         </div>
         <div class="form-group" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
           <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
@@ -648,16 +655,60 @@ let sortCol = null, sortDir = 1;
 let editId = null, delId = null;
 
 /* ═══════════════════════════════════════════════════════
-   INIT
+   PIN + INIT
 ═══════════════════════════════════════════════════════ */
+const PIN = '1234'; // ← change this to your preferred 4-digit PIN
+
 (function init() {
   setTheme(localStorage.getItem('bom-theme') || 'dark');
+  if (sessionStorage.getItem('bom-pin-ok') === '1') {
+    document.getElementById('pinState').style.display = 'none';
+    doConnect();
+  } else {
+    setupPinInputs();
+  }
+})();
+
+function setupPinInputs() {
+  const digits = Array.from(document.querySelectorAll('.pin-digit'));
+  digits.forEach((el, i) => {
+    el.addEventListener('input', () => {
+      el.value = el.value.replace(/\D/g, '').slice(-1);
+      el.classList.toggle('filled', el.value !== '');
+      if (el.value && i < digits.length - 1) digits[i + 1].focus();
+      if (digits.every(d => d.value)) {
+        const entered = digits.map(d => d.value).join('');
+        if (entered === PIN) {
+          sessionStorage.setItem('bom-pin-ok', '1');
+          document.getElementById('pinState').style.display = 'none';
+          doConnect();
+        } else {
+          const wrap = document.getElementById('pinInputs');
+          wrap.classList.add('shake');
+          document.getElementById('pinErr').textContent = 'Incorrect PIN';
+          setTimeout(() => {
+            wrap.classList.remove('shake');
+            digits.forEach(d => { d.value = ''; d.classList.remove('filled'); });
+            document.getElementById('pinErr').textContent = '';
+            digits[0].focus();
+          }, 500);
+        }
+      }
+    });
+    el.addEventListener('keydown', ev => {
+      if (ev.key === 'Backspace' && !el.value && i > 0) digits[i - 1].focus();
+    });
+  });
+  digits[0].focus();
+}
+
+function doConnect() {
   connect(
     'https://yfyannlnmyegbhyorhly.supabase.co',
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlmeWFubmxubXllZ2JoeW9yaGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDQzMDMsImV4cCI6MjA5NTkyMDMwM30.owws4Q2ywNDV-x0OK3zkCdz11jxDz_ygIbKAKGg4nnc',
     true
   );
-})();
+}
 
 /* ═══════════════════════════════════════════════════════
    THEME
@@ -747,8 +798,7 @@ async function dbDelete(id) {
 function showApp(url) {
   document.getElementById('setupState').style.display    = 'none';
   document.getElementById('tabNav').style.display        = 'flex';
-  document.getElementById('dbBadge').style.display       = 'flex';
-  document.getElementById('disconnectBtn').style.display = '';
+  document.getElementById('dbBadge').style.display = 'flex';
 
   const host = url ? (url.replace('https://','').split('.')[0] || url) : '?';
   document.getElementById('dbLabel').textContent = host.length > 18 ? host.slice(0,16)+'…' : host;
@@ -967,6 +1017,12 @@ function syncBuyLabel() {
   if (store) document.getElementById('fBuyLabel').value = store.label;
 }
 
+function syncSource() {
+  const label = document.getElementById('fBuyLabel').value;
+  const store = STORES.find(s => s.label === label);
+  if (store) document.getElementById('fSourceModal').value = store.source;
+}
+
 function openAdd() {
   editId = null;
   document.getElementById('editTitle').textContent = 'Add Item';
@@ -1033,7 +1089,6 @@ async function saveItem(ev) {
 }
 
 function closeEdit()    { document.getElementById('editModal').classList.remove('open'); }
-function closeEditIf(e) { if(e.target===document.getElementById('editModal')) closeEdit(); }
 
 /* ── DELETE ─────────────────────────────────────────── */
 function openDel(id) {
