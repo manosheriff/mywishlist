@@ -11,9 +11,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Inject Supabase credentials
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          sed -i "s|__SUPABASE_URL__|${{ secrets.SUPABASE_URL }}|g" index.html
-          sed -i "s|__SUPABASE_KEY__|${{ secrets.SUPABASE_KEY }}|g" index.html
+          python3 - <<'EOF'
+          import os
+          with open('index.html', 'r') as f:
+              html = f.read()
+          html = html.replace('__SUPABASE_URL__', os.environ['SUPABASE_URL'])
+          html = html.replace('__SUPABASE_KEY__', os.environ['SUPABASE_KEY'])
+          with open('index.html', 'w') as f:
+              f.write(html)
+          EOF
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
