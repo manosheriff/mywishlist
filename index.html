@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padel BOM Portal</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+/* ── THEMES ─────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --bg:#0d1117; --surface:#161b22; --surface2:#21262d; --surface3:#30363d;
+  --border:#30363d; --border2:#3d444d;
+  --text:#e6edf3; --text2:#8d96a0; --text3:#656d76;
+  --green:#3fb950; --green-bg:rgba(63,185,80,.1);
+  --blue:#58a6ff;  --blue-bg:rgba(88,166,255,.1);
+  --amber:#e3b341; --amber-bg:rgba(227,179,65,.1);
+  --red:#f85149;   --red-bg:rgba(248,81,73,.1);
+  --purple:#bc8cff;
+  --shadow:0 1px 4px rgba(0,0,0,.5);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.6);
+}
+:root[data-theme="light"] {
+  --bg:#f6f8fa; --surface:#fff; --surface2:#f6f8fa; --surface3:#eaeef2;
+  --border:#d0d7de; --border2:#bbc1c9;
+  --text:#1f2328; --text2:#636c76; --text3:#9198a1;
+  --green:#1a7f37; --green-bg:rgba(26,127,55,.08);
+  --blue:#0969da;  --blue-bg:rgba(9,105,218,.08);
+  --amber:#9a6700; --amber-bg:rgba(154,103,0,.08);
+  --red:#d1242f;   --red-bg:rgba(209,36,47,.08);
+  --purple:#8250df;
+  --shadow:0 1px 3px rgba(0,0,0,.12);
+  --shadow-lg:0 8px 24px rgba(0,0,0,.15);
+}
+:root[data-theme="warm"] {
+  --bg:#faf7f2; --surface:#fff; --surface2:#fdf9f4; --surface3:#f2ece2;
+  --border:#e2d9cc; --border2:#ccc0b0;
+  --text:#2c1f12; --text2:#6b5344; --text3:#a08878;
+  --green:#5a7a3a; --green-bg:rgba(90,122,58,.1);
+  --blue:#4a6fa5;  --blue-bg:rgba(74,111,165,.1);
+  --amber:#b07820; --amber-bg:rgba(176,120,32,.1);
+  --red:#b84040;   --red-bg:rgba(184,64,64,.1);
+  --purple:#7060a0;
+  --shadow:0 1px 3px rgba(100,70,40,.15);
+  --shadow-lg:0 8px 24px rgba(100,70,40,.2);
+}
+
+/* ── RESET ──────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  font-size:13.5px;line-height:1.5;transition:background .25s,color .25s;
+}
+
+/* ── APP SHELL ──────────────────────────────────────────── */
+.app-hdr{
+  position:fixed;top:0;left:0;right:0;height:52px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:12px;
+  z-index:1000;box-shadow:var(--shadow);
+}
+.app-main{padding-top:52px;min-height:100vh}
+.page-inner{max-width:1400px;margin:0 auto;padding:20px 18px}
+
+/* ── LOGO ───────────────────────────────────────────────── */
+.logo{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;
+  color:var(--text);letter-spacing:.6px;font-family:monospace;white-space:nowrap}
+.logo-dot{width:8px;height:8px;background:var(--green);border-radius:50%;flex-shrink:0}
+
+/* ── TAB NAV ────────────────────────────────────────────── */
+.tab-nav{display:flex;gap:2px}
+.tab-btn{
+  padding:5px 13px;border-radius:6px;font-size:12.5px;font-weight:500;
+  border:none;background:transparent;cursor:pointer;color:var(--text3);
+  transition:all .15s;font-family:inherit;
+}
+.tab-btn.active{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.tab-btn:hover:not(.active){color:var(--text2);background:var(--surface3)}
+
+/* ── HEADER RIGHT ───────────────────────────────────────── */
+.hdr-right{display:flex;align-items:center;gap:6px;margin-left:auto}
+.spacer{flex:1}
+
+/* ── DB BADGE ───────────────────────────────────────────── */
+.db-badge{
+  display:flex;align-items:center;gap:6px;
+  padding:3px 10px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;font-size:11.5px;color:var(--text2);max-width:200px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.db-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+.db-dot.busy{background:var(--amber);animation:pulse .6s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.3}}
+
+/* ── THEME GROUP ────────────────────────────────────────── */
+.theme-group{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.theme-btn{padding:4px 9px;border:none;background:transparent;cursor:pointer;font-size:11.5px;
+  color:var(--text3);transition:all .15s;font-family:inherit}
+.theme-btn.active{background:var(--surface3);color:var(--text)}
+.theme-btn:hover:not(.active){color:var(--text2)}
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:6px 13px;border-radius:6px;border:1px solid transparent;
+  cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;
+  transition:all .15s;white-space:nowrap;
+}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-primary{background:var(--green);color:#0d1117;border-color:var(--green)}
+[data-theme="light"] .btn-primary,[data-theme="warm"] .btn-primary{color:#fff}
+.btn-primary:hover{opacity:.88;transform:translateY(-1px)}
+.btn-secondary{background:var(--surface2);color:var(--text2);border-color:var(--border)}
+.btn-secondary:hover{color:var(--text);border-color:var(--text3);background:var(--surface3)}
+.btn-ghost{background:transparent;color:var(--text3);border-color:transparent}
+.btn-ghost:hover{background:var(--surface2);color:var(--text2)}
+.btn-danger{background:var(--red-bg);color:var(--red);border-color:var(--red-bg)}
+.btn-danger:hover{opacity:.85}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+
+/* ── SETUP / EMPTY STATE ────────────────────────────────── */
+.page-empty{
+  display:flex;align-items:center;justify-content:center;
+  min-height:calc(100vh - 52px);padding:40px 20px;
+}
+.setup-card{
+  text-align:center;width:100%;max-width:460px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:40px 36px;box-shadow:var(--shadow-lg);
+}
+.setup-icon{font-size:44px;margin-bottom:16px;line-height:1}
+.setup-card h2{font-size:20px;font-weight:700;margin-bottom:6px}
+.setup-card > p{font-size:12.5px;color:var(--text3);margin-bottom:24px;line-height:1.6}
+.setup-fields{text-align:left;display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+.setup-hint{
+  font-size:11px;color:var(--text3);margin-top:16px;
+  padding:10px 14px;background:var(--surface2);border-radius:8px;
+  border:1px solid var(--border);text-align:left;line-height:1.8;
+}
+.setup-hint a{color:var(--blue);cursor:pointer;text-decoration:none}
+.setup-hint a:hover{text-decoration:underline}
+.setup-hint code{
+  font-family:monospace;font-size:10.5px;
+  background:var(--surface3);padding:1px 5px;border-radius:3px;color:var(--text2);
+}
+
+/* ── TAB CONTENT ────────────────────────────────────────── */
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* ── STATS GRID ─────────────────────────────────────────── */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+@media(max-width:900px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.stats-grid{grid-template-columns:1fr 1fr}}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px}
+.stat-label{font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:5px}
+.stat-value{font-size:22px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.2}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:3px}
+.stat-card.highlight .stat-value{color:var(--green)}
+.stat-card.warn .stat-value{color:var(--amber)}
+
+/* ── DASH GRID ──────────────────────────────────────────── */
+.dash-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.dash-row{grid-template-columns:1fr}}
+.dash-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.dash-card-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:12px}
+
+/* ── MINI TABLE ─────────────────────────────────────────── */
+.mini-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.mini-table tr:hover td{background:var(--surface2)}
+.mini-table td{padding:5px 6px;vertical-align:middle}
+.mini-table .mt-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:10px;color:var(--text)}
+.mini-table .mt-sub{text-align:right;font-size:11px;color:var(--text3);white-space:nowrap;padding-left:8px}
+
+/* ── TOOLBAR ────────────────────────────────────────────── */
+.toolbar{display:flex;align-items:center;gap:7px;margin-bottom:12px;flex-wrap:wrap}
+.search-input{
+  flex:1;min-width:180px;max-width:280px;padding:6px 11px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  color:var(--text);font-size:12.5px;font-family:inherit;
+}
+.search-input::placeholder{color:var(--text3)}
+.search-input:focus{outline:none;border-color:var(--blue)}
+.filter-sel{
+  padding:6px 10px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;font-family:inherit;
+}
+.filter-sel:focus{outline:none;border-color:var(--blue)}
+.count-badge{font-size:11.5px;color:var(--text3)}
+
+/* ── TABLE ──────────────────────────────────────────────── */
+.table-wrap{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  overflow:auto;max-height:calc(100vh - 220px);
+}
+.data-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px}
+.data-table th{
+  position:sticky;top:0;background:var(--surface2);
+  padding:8px 11px;text-align:left;font-weight:600;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--text3);
+  border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;
+}
+.data-table th:hover{color:var(--text2)}
+.data-table th.sorted-asc,.data-table th.sorted-desc{color:var(--blue)}
+.sort-arrow{margin-left:3px;font-size:10px}
+.data-table td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:middle}
+.data-table tbody tr:last-child td{border-bottom:none}
+.data-table tbody tr:hover td{background:var(--surface2)}
+.data-table tbody tr.is-bought td{opacity:.45}
+
+/* column widths */
+.col-chk{width:34px;text-align:center}
+.col-num{width:38px;text-align:right}
+.col-ref{width:82px}
+.col-src{width:110px}
+.col-qty{width:46px;text-align:right}
+.col-price{width:70px;text-align:right;font-variant-numeric:tabular-nums}
+.col-total{width:72px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.col-buy{width:126px}
+.col-crit{width:50px;text-align:center}
+.col-act{width:72px;text-align:right}
+.col-desc{min-width:200px}
+td.col-num,td.col-qty,td.col-price,td.col-total{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── CHECKBOX ───────────────────────────────────────────── */
+.cb{
+  width:16px;height:16px;border:1.5px solid var(--border2);border-radius:4px;
+  background:transparent;cursor:pointer;display:inline-flex;align-items:center;
+  justify-content:center;transition:all .12s;flex-shrink:0;
+}
+.cb.on{background:var(--green);border-color:var(--green)}
+.cb.on::after{content:'✓';color:#0d1117;font-size:10px;font-weight:800;line-height:1}
+.cb:hover:not(.on){border-color:var(--green);background:var(--green-bg)}
+
+/* ── REF TAG / SOURCE PILL ──────────────────────────────── */
+.ref-tag{font-family:monospace;font-size:10.5px;background:var(--surface2);border:1px solid var(--border);padding:2px 5px;border-radius:4px;color:var(--text2);white-space:nowrap}
+.source-pill{font-size:10.5px;padding:1px 6px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text3);white-space:nowrap;display:inline-block}
+.crit-badge{font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.2px}
+
+/* ── ROW ACTIONS ────────────────────────────────────────── */
+.row-actions{display:flex;gap:3px;justify-content:flex-end}
+.btn-icon{
+  width:27px;height:27px;border:1px solid var(--border);border-radius:5px;
+  background:transparent;cursor:pointer;display:inline-flex;align-items:center;
+  justify-content:center;font-size:12px;color:var(--text3);transition:all .15s;
+}
+.btn-icon:hover{background:var(--surface2);color:var(--text)}
+.btn-icon.del:hover{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+
+/* ── BUY BUTTONS ────────────────────────────────────────── */
+.buy-btn{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap;text-decoration:none;border:1px solid transparent;transition:opacity .15s}
+a.buy-btn:hover{opacity:.78;text-decoration:none}
+.buy-btn.green {background:var(--green-bg); color:var(--green); border-color:var(--green-bg)}
+.buy-btn.teal  {background:var(--blue-bg);  color:var(--blue);  border-color:var(--blue-bg)}
+.buy-btn.slate {background:var(--surface2); color:var(--text2); border-color:var(--border)}
+.buy-btn.red   {background:var(--red-bg);   color:var(--red);   border-color:var(--red-bg)}
+.buy-btn.purple{background:var(--surface2); color:var(--purple);border-color:var(--border)}
+.buy-btn.grey  {background:var(--surface2); color:var(--text3); border-color:var(--border)}
+.buy-btn.navy  {background:var(--blue-bg);  color:var(--blue);  border-color:var(--blue-bg)}
+.buy-btn.amber {background:var(--amber-bg); color:var(--amber); border-color:var(--amber-bg)}
+
+/* ── TABLE FOOTER ───────────────────────────────────────── */
+.tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;font-size:12px;color:var(--text3);flex-wrap:wrap;gap:6px}
+.tbl-footer strong{color:var(--text2)}
+
+/* ── MODALS ─────────────────────────────────────────────── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px 24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:18px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ── FORM ───────────────────────────────────────────────── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.span2{grid-column:1/-1}
+.form-label{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.form-input,.form-select,.form-textarea{padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;transition:border .15s;font-family:inherit}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--blue)}
+.form-textarea{resize:vertical;min-height:65px}
+.form-check{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text2)}
+.form-check input{width:15px;height:15px;cursor:pointer;accent-color:var(--green)}
+
+/* ── REPORTS ────────────────────────────────────────────── */
+.rpt-actions{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.rpt-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:14px}
+.rpt-title{font-size:15px;font-weight:700;margin-bottom:4px}
+.rpt-date{font-size:11px;color:var(--text3);margin-bottom:16px}
+.rpt-group{margin-bottom:24px}
+.rpt-group-title{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;padding:6px 10px;background:var(--surface2);border-radius:6px}
+.rpt-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.rpt-table th{padding:7px 10px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);border-bottom:1px solid var(--border);background:var(--surface2)}
+.rpt-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.rpt-table tbody tr:last-child td{border-bottom:none}
+.rpt-table tbody tr:hover td{background:var(--surface2)}
+.rpt-table .td-num{text-align:right;font-variant-numeric:tabular-nums}
+.rpt-subtotal td{border-top:1px solid var(--border);background:var(--surface2)!important}
+.rpt-grand{margin-top:12px;padding:10px 14px;background:var(--surface2);border-radius:7px;font-size:13px;color:var(--text2)}
+.rpt-grand strong{color:var(--text)}
+
+/* ── INLINE EMPTY ───────────────────────────────────────── */
+.inline-empty{text-align:center;padding:50px 20px;color:var(--text3)}
+.inline-empty .icon{font-size:32px;margin-bottom:8px}
+.inline-empty p{font-size:12.5px}
+
+/* ── LOADING SPINNER ────────────────────────────────────── */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ──────────────────────────────────────────────── */
+.toast-stack{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:7px;z-index:9999}
+.toast{padding:10px 15px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;color:var(--text);font-size:12.5px;box-shadow:var(--shadow-lg);animation:toastIn .2s ease;min-width:200px}
+.toast.red{border-left-color:var(--red)}
+.toast.amber{border-left-color:var(--amber)}
+@keyframes toastIn{from{transform:translateX(60px);opacity:0}to{transform:none;opacity:1}}
+
+/* ── PRINT ──────────────────────────────────────────────── */
+@media print{
+  .app-hdr,.rpt-actions,.btn,.btn-icon,.row-actions{display:none!important}
+  .rpt-section{border:1px solid #ccc;page-break-inside:avoid}
+  body{background:#fff;color:#000}
+}
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────── -->
+<header class="app-hdr">
+  <div class="logo"><div class="logo-dot"></div>PADEL BOM</div>
+
+  <nav class="tab-nav" id="tabNav" style="display:none">
+    <button class="tab-btn active" id="tbtn-dashboard" onclick="setTab('dashboard')">📊 Dashboard</button>
+    <button class="tab-btn" id="tbtn-items"   onclick="setTab('items')">📋 Items</button>
+    <button class="tab-btn" id="tbtn-reports" onclick="setTab('reports')">📄 Reports</button>
+  </nav>
+
+  <div class="hdr-right">
+    <div class="db-badge" id="dbBadge" style="display:none">
+      <div class="db-dot" id="dbDot"></div>
+      <span id="dbLabel">—</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="disconnectBtn" onclick="disconnect()" style="display:none" title="Disconnect">✕</button>
+    <div class="theme-group">
+      <button class="theme-btn active" data-theme="dark"  onclick="setTheme('dark')">Dark</button>
+      <button class="theme-btn"        data-theme="light" onclick="setTheme('light')">Light</button>
+      <button class="theme-btn"        data-theme="warm"  onclick="setTheme('warm')">Warm</button>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN ────────────────────────────────────────────── -->
+<main class="app-main">
+
+<!-- SETUP ────────────────────────────────────────────── -->
+<div id="setupState" class="page-empty">
+  <div class="setup-card">
+    <div class="setup-icon">🗄️</div>
+    <h2>Connect to Supabase</h2>
+    <p>Enter your project details below. Your data lives in Supabase — nothing is stored locally.</p>
+    <div class="setup-fields">
+      <div class="form-group">
+        <label class="form-label">Project URL</label>
+        <input type="url" id="sbUrl" class="form-input" placeholder="https://xxxx.supabase.co" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Anon / Public Key</label>
+        <input type="text" id="sbKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="connectBtn" onclick="connect()" style="width:100%;justify-content:center;padding:10px">
+      Connect
+    </button>
+    <div class="setup-hint">
+      <strong>First time?</strong> Run this SQL once in your Supabase <a onclick="copySchema()">→ copy schema SQL</a><br><br>
+      <code>Table: bom_items</code><br>
+      <code>Columns: id, pos, ref, description, category, source, qty, price, notes, critical, bought</code>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD ────────────────────────────────────────── -->
+<div id="tab-dashboard" class="tab-content">
+  <div class="page-inner">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="dash-row">
+      <div class="dash-card">
+        <div class="dash-card-title">By Category</div>
+        <div id="dashCat"></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">By Source / Store</div>
+        <div id="dashStore"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ITEMS ────────────────────────────────────────────── -->
+<div id="tab-items" class="tab-content">
+  <div class="page-inner">
+    <div class="toolbar">
+      <input type="search" id="fSearch" class="search-input" placeholder="🔍  Search…" oninput="renderItems()">
+      <select id="fCat"    class="filter-sel" onchange="renderItems()"><option value="">All Categories</option></select>
+      <select id="fSource" class="filter-sel" onchange="renderItems()"><option value="">All Sources</option></select>
+      <select id="fStatus" class="filter-sel" onchange="renderItems()">
+        <option value="">All Status</option>
+        <option value="needed">Needed</option>
+        <option value="bought">Purchased</option>
+        <option value="critical">⚠ Critical</option>
+      </select>
+      <span class="spacer"></span>
+      <span class="count-badge" id="countBadge"></span>
+      <button class="btn btn-primary btn-sm" onclick="openAdd()">+ Add Item</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-chk"></th>
+            <th class="col-num"   onclick="sortBy('pos')"        >#    <span class="sort-arrow" id="sa-pos"></span></th>
+            <th class="col-ref"   onclick="sortBy('ref')"        >Ref  <span class="sort-arrow" id="sa-ref"></span></th>
+            <th class="col-desc"  onclick="sortBy('description')">Description <span class="sort-arrow" id="sa-description"></span></th>
+            <th class="col-src"   onclick="sortBy('source')"     >Source <span class="sort-arrow" id="sa-source"></span></th>
+            <th class="col-qty"   onclick="sortBy('qty')"        >Qty  <span class="sort-arrow" id="sa-qty"></span></th>
+            <th class="col-price" onclick="sortBy('price')"      >LE/unit <span class="sort-arrow" id="sa-price"></span></th>
+            <th class="col-total" onclick="sortBy('total')"      >Total <span class="sort-arrow" id="sa-total"></span></th>
+            <th class="col-buy">Buy</th>
+            <th class="col-crit">⚠</th>
+            <th class="col-act"></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="tbl-footer" id="tblFooter"></div>
+  </div>
+</div>
+
+<!-- REPORTS ──────────────────────────────────────────── -->
+<div id="tab-reports" class="tab-content">
+  <div class="page-inner">
+    <div class="rpt-actions">
+      <button class="btn btn-secondary" onclick="showReport('shopping')">🛒 Shopping List by Store</button>
+      <button class="btn btn-secondary" onclick="showReport('cost')">💰 Cost Breakdown</button>
+      <button class="btn btn-secondary" onclick="showReport('critical')">⚠ Critical Items</button>
+      <button class="btn btn-ghost"     onclick="window.print()">🖨 Print</button>
+    </div>
+    <div id="rptOutput">
+      <div class="inline-empty"><div class="icon">📄</div><p>Select a report above</p></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- ── ADD / EDIT MODAL ──────────────────────────────── -->
+<div class="modal-overlay" id="editModal" onclick="closeEditIf(event)">
+  <div class="modal">
+    <div class="modal-title" id="editTitle">Add Item</div>
+    <form id="editForm" onsubmit="saveItem(event)">
+      <div class="form-grid">
+        <div class="form-group span2">
+          <label class="form-label">Description *</label>
+          <input type="text" id="fDesc" class="form-input" required placeholder="e.g. BTS7960B Motor Driver IC">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ref Designator</label>
+          <input type="text" id="fRef" class="form-input" placeholder="e.g. U1,U2">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input type="text" id="fCatInput" class="form-input" list="catDatalist" placeholder="e.g. Motor Drivers">
+          <datalist id="catDatalist"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Source / Store</label>
+          <input type="text" id="fSourceModal" class="form-input" placeholder="e.g. circuits-elec.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Qty *</label>
+          <input type="number" id="fQty" class="form-input" min="1" value="1" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit Price (LE) *</label>
+          <input type="number" id="fPrice" class="form-input" min="0" step="0.5" value="0" required>
+        </div>
+        <div class="form-group span2">
+          <label class="form-label">Notes</label>
+          <textarea id="fNotes" class="form-textarea" placeholder="Additional notes…"></textarea>
+        </div>
+        <div class="form-group span2">
+          <label class="form-label">Buy Link URL</label>
+          <input type="url" id="fBuyUrl" class="form-input" placeholder="https://circuits-elec.com/products/...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Buy Button Label</label>
+          <input type="text" id="fBuyLabel" class="form-input" placeholder="e.g. 🟢 circuits-elec">
+        </div>
+        <div class="form-group" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+          <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
+          <label class="form-check"><input type="checkbox" id="fBought"> Already Purchased</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveBtn">Add Item</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── DELETE MODAL ───────────────────────────────────── -->
+<div class="modal-overlay" id="delModal" onclick="closeDelIf(event)">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Delete Item?</div>
+    <p id="delDesc" style="color:var(--text2);font-size:13px;margin-bottom:6px"></p>
+    <p style="color:var(--text3);font-size:12px">This will permanently delete the row from Supabase.</p>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="closeDel()">Cancel</button>
+      <button type="button" class="btn btn-danger" onclick="confirmDel()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ─────────────────────────────────────────── -->
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   SCHEMA SQL (shown in setup screen)
+═══════════════════════════════════════════════════════ */
+const SCHEMA_SQL = `-- Run once in Supabase SQL Editor
+create table if not exists bom_items (
+  id          bigserial primary key,
+  pos         integer default 0,
+  ref         text default '',
+  description text not null default '',
+  category    text default '',
+  source      text default '',
+  qty         integer default 1,
+  price       numeric(10,2) default 0,
+  notes       text default '',
+  critical    boolean default false,
+  bought      boolean default false,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+-- Allow all operations (single-user portal)
+alter table bom_items enable row level security;
+create policy "allow_all" on bom_items for all using (true) with check (true);`;
+
+/* ═══════════════════════════════════════════════════════
+   BUY MAP  (pos → {label, url, cls})
+═══════════════════════════════════════════════════════ */
+const _REMOVED_BUY_MAP = { // buy links now stored in Supabase buy_url / buy_label columns
+  1:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/dc-motor-driver-bts7960-single-channel-43',              cls:'green'},
+  2:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/drv8825-stepper-motor-driver',                           cls:'green'},
+  3:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/atmega328p-avr-28-pin-20mhz-32k',                        cls:'green'},
+  4:  {label:'✅ Owned',          url:'',                                                                                           cls:'grey'},
+  5:  {label:'🔵 RAM e-shop',    url:'https://www.ram-e-shop.com/shop/n14-14-narrow-ic-socket-n14-14-narrow-base-28-pin-5619',    cls:'teal'},
+  6:  {label:'🟠 UGE-one',       url:'https://uge-one.com/product/fast-blow-fuse-20mm-glass-f5x20-20a/',                          cls:'slate'},
+  7:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/glass-fuse-t5-10a-250v',                                cls:'green'},
+  8:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/glass-fuse-t5-5a-250v',                                 cls:'green'},
+  9:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/glass-fuse-t5-1a-250v',                                 cls:'green'},
+  10: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/fuse-pocket-holder-on-pcb-for-t5x20',                   cls:'green'},
+  11: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/l7805cv-ve-voltage-regulator-5v-1a',                    cls:'green'},
+  12: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/100-uf-capacitor',                                      cls:'green'},
+  13: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/470-uf-capacitor',                                      cls:'green'},
+  14: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/0-1-uf-ceramic-capacitor',                              cls:'green'},
+  15: {label:'🔴 microohm-eg',   url:'https://microohm-eg.com/ceramic-capacitor-22pf-50v/',                                      cls:'red'},
+  16: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/10-uf-capacitor',                                       cls:'green'},
+  17: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/resistor-10-kohm',                                      cls:'green'},
+  18: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/resistor-1-kohm',                                       cls:'green'},
+  19: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/resistor-2-kohm',                                       cls:'green'},
+  20: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/resistor-1-ohm',                                        cls:'green'},
+  21: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/infrared-object-detection-sensor',                      cls:'green'},
+  22: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/ultrasonic-sensor-distance-measuring-module',           cls:'green'},
+  23: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/hall-effect-sensor',                                    cls:'green'},
+  24: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/speed-encoder-disk',                                    cls:'green'},
+  25: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/pcb-terminal-block-5mm-2pin',                           cls:'green'},
+  26: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/pcb-terminal-block-5mm-3pin',                           cls:'green'},
+  27: {label:'🟠 UGE-one',       url:'https://uge-one.com/screw-terminal-block-4-pole-pitch-5-0mm-straight-pin-for-pcb.html',    cls:'slate'},
+  28: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/male-pin-headers-2-54-mm-40-pin',                       cls:'green'},
+  29: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/female-pin-headers-2-54-mm-40-pin',                     cls:'green'},
+  30: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/male-pin-headers-2-54-mm-40-pin',                       cls:'green'},
+  31: {label:'🟠 UGE-one',       url:'https://uge-one.com/product/xt60-connectors-male-and-female-pair/',                        cls:'slate'},
+  32: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/crystal-16-000-mhz',                                   cls:'green'},
+  33: {label:'',url:'',cls:''}, 34: {label:'',url:'',cls:''},
+  35: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/search?q=hookup+wire+22awg',                                     cls:'green'},
+  36: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/jst-3-pin-30cm-2-54mm',                                cls:'green'},
+  37: {label:'🔵 RAM e-shop',    url:'https://www.ram-e-shop.com/shop/ph60-mf-20cm-ph60-20cm-male-to-female-40-jumper-wires-set-7066', cls:'teal'},
+  38: {label:'🔵 RAM e-shop',    url:'https://www.ram-e-shop.com/shop/h-sh-set-164-color-bag-of-heat-shrink-164pcs-set-color-9303',    cls:'teal'},
+  39: {label:'',url:'',cls:''},
+  40: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/solder-wire-0-8mm-pen',                                cls:'green'},
+  41: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/soldering-flux-paste',                                  cls:'green'},
+  42: {label:'🔵 RAM e-shop',    url:'https://www.ram-e-shop.com/shop/cp2515-goot-goot-r-cp-2515-solder-wicker-width-2-5mm-length-1-5m-6057', cls:'teal'},
+  43: {label:'',url:'',cls:''}, 44: {label:'',url:'',cls:''},
+  45: {label:'💊 Pharmacy',url:'',cls:'purple'}, 46: {label:'💊 Pharmacy',url:'',cls:'purple'},
+  47: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/pcb-fr4-15x20-cm-single-layer',                         cls:'green'},
+  48: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/thermal-transfer-pcb-paper',                            cls:'green'},
+  49: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/pcb-etching-acid-solution-250-mm',                      cls:'green'},
+  50: {label:'🔨 Hardware',url:'',cls:'slate'},
+  51: {label:'💊 Pharmacy',url:'',cls:'purple'}, 52: {label:'💊 Pharmacy',url:'',cls:'purple'},
+  53: {label:'🛒 Supermarket',url:'',cls:'teal'}, 54: {label:'📝 Stationery',url:'',cls:'slate'},
+  55: {label:'🏠 Home store',url:'',cls:'slate'},
+  56: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/search?q=uv+solder+mask',                                        cls:'green'},
+  57: {label:'🔨 Hardware',url:'',cls:'slate'}, 58: {label:'🔨 Hardware',url:'',cls:'slate'},
+  59: {label:'🔨 Hardware',url:'',cls:'slate'}, 60: {label:'🔨 Hardware',url:'',cls:'slate'},
+  61: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/usbasp-avr-programmer',                                 cls:'green'},
+  62: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/usb-cable-to-micro-high-speed-data-cable',              cls:'green'},
+  63: {label:'',url:'',cls:''},
+  64: {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/breadboard-840-pin',                                    cls:'green'},
+  65: {label:'',url:'',cls:''},
+  66: {label:'🔨 Hardware',url:'',cls:'slate'}, 67: {label:'🔨 Hardware',url:'',cls:'slate'},
+  68: {label:'🖨 Print shop',url:'',cls:'navy'},
+};
+
+const SOURCE_GROUPS = [
+  { value:'circuits', label:'🟢 circuits-elec.com', match: s => /circuits/i.test(s) },
+  { value:'hd',       label:'🔵 HD Electronics',    match: s => /hd.?electron|hdelectronics/i.test(s) },
+  { value:'ram',      label:'🔵 RAM e-shop',        match: s => /\bram\b/i.test(s) },
+  { value:'uge',      label:'🟠 UGE-one',           match: s => /uge/i.test(s) },
+  { value:'microohm', label:'🔴 microohm-eg',       match: s => /microohm/i.test(s) },
+  { value:'external', label:'🏠 External / Local',  match: s => !/circuits|hd.?electron|hdelectronics|\bram\b|uge|microohm|owned/i.test(s) },
+];
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+let sb   = null;
+let rows = [];
+let sortCol = null, sortDir = 1;
+let editId = null, delId = null;
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+(function init() {
+  setTheme(localStorage.getItem('bom-theme') || 'dark');
+  const url = 'https://yfyannlnmyegbhyorhly.supabase.co';
+  const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlmeWFubmxubXllZ2JoeW9yaGx5Iiwicm
+9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDQzMDMsImV4cCI6MjA5NTkyMDMwM30.owws4Q2ywNDV-x0OK3zkCdz11jxDz_ygIbKAKGg4nnc';
+  connect(url, key, true);
+})();
+
+/* ═══════════════════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════════════════ */
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === t));
+  localStorage.setItem('bom-theme', t);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUPABASE — CONNECT
+═══════════════════════════════════════════════════════ */
+async function connect(url, key, silent = false) {
+  url = url || document.getElementById('sbUrl').value.trim();
+  key = key || document.getElementById('sbKey').value.trim();
+  if (!url || !key) { toast('Enter URL and key', 'amber'); return; }
+
+  const btn = document.getElementById('connectBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Connecting…'; }
+
+  try {
+    sb = supabase.createClient(url, key);
+    const { error } = await sb.from('bom_items').select('id', { count: 'exact', head: true });
+    if (error) throw error;
+
+    localStorage.setItem('bom-sb-url', url);
+    localStorage.setItem('bom-sb-key', key);
+
+    await loadItems();
+    showApp(url);
+    if (!silent) toast('Connected to Supabase');
+  } catch (err) {
+    toast('Connection failed: ' + err.message, 'red');
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+  }
+}
+
+function disconnect() {
+  sb = null; rows = [];
+  localStorage.removeItem('bom-sb-url');
+  localStorage.removeItem('bom-sb-key');
+  document.getElementById('setupState').style.display   = 'flex';
+  document.getElementById('tabNav').style.display       = 'none';
+  document.getElementById('dbBadge').style.display      = 'none';
+  document.getElementById('importBtn').style.display    = 'none';
+  document.getElementById('disconnectBtn').style.display = 'none';
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUPABASE — LOAD
+═══════════════════════════════════════════════════════ */
+async function loadItems() {
+  setBusy(true);
+  const { data, error } = await sb.from('bom_items').select('*').order('pos').order('id');
+  setBusy(false);
+  if (error) { toast('Load failed: ' + error.message, 'red'); return; }
+  rows = data || [];
+  populateFilters();
+  renderItems();
+  renderDashboard();
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUPABASE — CRUD
+═══════════════════════════════════════════════════════ */
+async function dbInsert(payload) {
+  const maxPos = rows.length ? Math.max(...rows.map(r => r.pos || 0)) : 0;
+  const { error } = await sb.from('bom_items').insert({ ...payload, pos: maxPos + 1 });
+  if (error) throw error;
+}
+
+async function dbUpdate(id, payload) {
+  const { error } = await sb.from('bom_items').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+
+async function dbDelete(id) {
+  const { error } = await sb.from('bom_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SHOW APP
+═══════════════════════════════════════════════════════ */
+function showApp(url) {
+  document.getElementById('setupState').style.display    = 'none';
+  document.getElementById('tabNav').style.display        = 'flex';
+  document.getElementById('dbBadge').style.display       = 'flex';
+  document.getElementById('disconnectBtn').style.display = '';
+
+  const host = url ? (url.replace('https://','').split('.')[0] || url) : '?';
+  document.getElementById('dbLabel').textContent = host.length > 18 ? host.slice(0,16)+'…' : host;
+
+  setTab('dashboard');
+}
+
+function setBusy(on) {
+  document.getElementById('dbDot')?.classList.toggle('busy', on);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════════════ */
+function setTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('tbtn-' + name).classList.add('active');
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'items')     renderItems();
+}
+
+/* ═══════════════════════════════════════════════════════
+   FILTERS
+═══════════════════════════════════════════════════════ */
+function populateFilters() {
+  const cats = [...new Set(rows.map(r => r.category).filter(Boolean))].sort();
+  const fc = document.getElementById('fCat');
+  fc.innerHTML = '<option value="">All Categories</option>' +
+    cats.map(c => `<option value="${e(c)}">${c}</option>`).join('');
+
+  document.getElementById('catDatalist').innerHTML = cats.map(c => `<option value="${e(c)}">`).join('');
+
+  const fs = document.getElementById('fSource');
+  fs.innerHTML = '<option value="">All Sources</option>' +
+    SOURCE_GROUPS.filter(g => rows.some(r => g.match(r.source || '')))
+      .map(g => `<option value="${g.value}">${g.label}</option>`).join('');
+}
+
+/* ═══════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════ */
+function renderDashboard() {
+  const all   = rows;
+  const bought = all.filter(r => r.bought);
+  const total  = all.reduce((s, r) => s + (r.qty||0) * (r.price||0), 0);
+  const spent  = bought.reduce((s, r) => s + (r.qty||0) * (r.price||0), 0);
+  const crit   = all.filter(r => r.critical && !r.bought).length;
+  const pct    = all.length ? Math.round(bought.length / all.length * 100) : 0;
+
+  document.getElementById('statsGrid').innerHTML = [
+    ['TOTAL ITEMS',    all.length,                           pct + '% purchased', ''],
+    ['TOTAL COST',     'LE ' + total.toLocaleString(),       '',                  ''],
+    ['PURCHASED',      bought.length + ' / ' + all.length,  pct + '% done',      pct === 100 ? 'highlight' : ''],
+    ['REMAINING COST', 'LE ' + (total-spent).toLocaleString(), '',                ''],
+    ['CRITICAL LEFT',  crit, crit ? '⚠ needs attention' : '✓ all covered',       crit ? 'warn' : ''],
+  ].map(([label, val, sub, cls]) => `
+    <div class="stat-card ${cls}">
+      <div class="stat-label">${label}</div>
+      <div class="stat-value">${val}</div>
+      ${sub ? `<div class="stat-sub">${sub}</div>` : ''}
+    </div>`).join('');
+
+  const catG = {};
+  all.forEach(r => { const k = r.category || '—'; if(!catG[k]) catG[k]=[]; catG[k].push(r); });
+  document.getElementById('dashCat').innerHTML = `<table class="mini-table">
+    ${Object.entries(catG).map(([cat,its]) => {
+      const ct = its.reduce((s,i) => s+(i.qty||0)*(i.price||0), 0);
+      const pb = its.filter(i=>i.bought).length;
+      return `<tr>
+        <td style="font-size:15px;width:22px">${[...cat][0]||'·'}</td>
+        <td style="color:var(--text2);font-size:12px;max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${cat.replace(/^.\s*/,'').replace(/&/g,'&amp;')}</td>
+        <td class="mt-sub">${pb}/${its.length}</td>
+        <td class="mt-num">${ct.toLocaleString()} LE</td>
+      </tr>`;
+    }).join('')}
+  </table>`;
+
+  const storeG = {};
+  all.forEach(r => {
+    const g = SOURCE_GROUPS.find(g => g.match(r.source||''));
+    const k = g ? g.label : '🏠 External';
+    if(!storeG[k]) storeG[k]={n:0,cost:0};
+    storeG[k].n++; storeG[k].cost += (r.qty||0)*(r.price||0);
+  });
+  document.getElementById('dashStore').innerHTML = `<table class="mini-table">
+    ${Object.entries(storeG).map(([s,{n,cost}]) => `
+      <tr>
+        <td style="color:var(--text2);font-size:12px">${s}</td>
+        <td class="mt-sub">${n} item${n!==1?'s':''}</td>
+        <td class="mt-num">${cost.toLocaleString()} LE</td>
+      </tr>`).join('')}
+  </table>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ITEMS TABLE
+═══════════════════════════════════════════════════════ */
+function renderItems() {
+  const search = (document.getElementById('fSearch')?.value||'').toLowerCase();
+  const fCat   = document.getElementById('fCat')?.value || '';
+  const fSrc   = document.getElementById('fSource')?.value || '';
+  const fStat  = document.getElementById('fStatus')?.value || '';
+
+  let items = rows.map((r, i) => ({...r, _idx: i}));
+  if (search) items = items.filter(r =>
+    (r.description||'').toLowerCase().includes(search) ||
+    (r.ref||'').toLowerCase().includes(search) ||
+    (r.notes||'').toLowerCase().includes(search) ||
+    (r.source||'').toLowerCase().includes(search));
+  if (fCat)  items = items.filter(r => r.category === fCat);
+  if (fSrc)  { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>g.match(r.source||'')); }
+  if (fStat === 'needed')   items = items.filter(r => !r.bought);
+  if (fStat === 'bought')   items = items.filter(r => r.bought);
+  if (fStat === 'critical') items = items.filter(r => r.critical && !r.bought);
+
+  if (sortCol) {
+    items.sort((a, b) => {
+      let av, bv;
+      if      (sortCol==='pos')         { av=a.pos||0;        bv=b.pos||0; }
+      else if (sortCol==='ref')         { av=a.ref||'';       bv=b.ref||''; }
+      else if (sortCol==='description') { av=a.description||''; bv=b.description||''; }
+      else if (sortCol==='source')      { av=a.source||'';    bv=b.source||''; }
+      else if (sortCol==='qty')         { av=a.qty||0;        bv=b.qty||0; }
+      else if (sortCol==='price')       { av=a.price||0;      bv=b.price||0; }
+      else if (sortCol==='total')       { av=(a.qty||0)*(a.price||0); bv=(b.qty||0)*(b.price||0); }
+      if (typeof av==='string') return sortDir*av.localeCompare(bv);
+      return sortDir*(av-bv);
+    });
+  }
+
+  document.getElementById('countBadge').textContent =
+    items.length===rows.length ? `${items.length} items` : `${items.length} of ${rows.length}`;
+
+  let n=0;
+  document.getElementById('tableBody').innerHTML = items.map(r => {
+    n++;
+    const bm = BUY_MAP[r.pos];
+    return `<tr class="${r.bought?'is-bought':''}">
+      <td class="col-chk"><div class="cb ${r.bought?'on':''}" onclick="toggleBought(${r.id},${r.bought})"></div></td>
+      <td class="col-num">${n}</td>
+      <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
+      <td class="col-desc">${e(r.description||'')}</td>
+      <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
+      <td class="col-qty">${r.qty||0}</td>
+      <td class="col-price">${(r.price||0).toLocaleString()}</td>
+      <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
+      <td class="col-buy">${buyBtn(r)}</td>
+      <td class="col-crit">${r.critical?'<span class="crit-badge">⚠</span>':''}</td>
+      <td class="col-act"><div class="row-actions">
+        <button class="btn-icon" onclick="openEdit(${r.id})" title="Edit">✎</button>
+        <button class="btn-icon del" onclick="openDel(${r.id})" title="Delete">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="11"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
+
+  const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
+  const sc = items.filter(r=>r.bought).reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
+  document.getElementById('tblFooter').innerHTML =
+    `<span>${items.length} item${items.length!==1?'s':''}</span>
+     <span>Total <strong>${tc.toLocaleString()} LE</strong> · Spent <strong>${sc.toLocaleString()} LE</strong> · Remaining <strong>${(tc-sc).toLocaleString()} LE</strong></span>`;
+
+  ['pos','ref','description','source','qty','price','total'].forEach(col => {
+    const el = document.getElementById('sa-'+col);
+    if (el) el.textContent = col===sortCol ? (sortDir===1?'↑':'↓') : '';
+  });
+  document.querySelectorAll('.data-table th').forEach(th => {
+    th.classList.remove('sorted-asc','sorted-desc');
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow && arrow.id==='sa-'+sortCol) th.classList.add(sortDir===1?'sorted-asc':'sorted-desc');
+  });
+}
+
+function sortBy(col) {
+  if (sortCol===col) sortDir*=-1; else {sortCol=col; sortDir=1;}
+  renderItems();
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOGGLE BOUGHT
+═══════════════════════════════════════════════════════ */
+async function toggleBought(id, current) {
+  // Optimistic update
+  const r = rows.find(r=>r.id===id); if(r) r.bought = !current;
+  renderItems(); renderDashboard();
+  try {
+    await dbUpdate(id, { bought: !current });
+  } catch(err) {
+    if(r) r.bought = current; // rollback
+    renderItems(); renderDashboard();
+    toast('Save failed: '+err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   CRUD — ADD / EDIT
+═══════════════════════════════════════════════════════ */
+function openAdd() {
+  editId = null;
+  document.getElementById('editTitle').textContent = 'Add Item';
+  document.getElementById('saveBtn').textContent   = 'Add Item';
+  document.getElementById('editForm').reset();
+  document.getElementById('editModal').classList.add('open');
+}
+
+function openEdit(id) {
+  editId = id;
+  const r = rows.find(r=>r.id===id); if(!r) return;
+  document.getElementById('editTitle').textContent    = 'Edit Item';
+  document.getElementById('saveBtn').textContent      = 'Save Changes';
+  document.getElementById('fDesc').value              = r.description||'';
+  document.getElementById('fRef').value               = r.ref||'';
+  document.getElementById('fCatInput').value          = r.category||'';
+  document.getElementById('fSourceModal').value       = r.source||'';
+  document.getElementById('fQty').value               = r.qty||1;
+  document.getElementById('fPrice').value             = r.price||0;
+  document.getElementById('fNotes').value             = r.notes||'';
+  document.getElementById('fBuyUrl').value            = r.buy_url||'';
+  document.getElementById('fBuyLabel').value          = r.buy_label||'';
+  document.getElementById('fCritical').checked        = r.critical||false;
+  document.getElementById('fBought').checked          = r.bought||false;
+  document.getElementById('editModal').classList.add('open');
+}
+
+async function saveItem(ev) {
+  ev.preventDefault();
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+
+  const payload = {
+    description: document.getElementById('fDesc').value.trim(),
+    ref:         document.getElementById('fRef').value.trim(),
+    category:    document.getElementById('fCatInput').value.trim(),
+    source:      document.getElementById('fSourceModal').value.trim(),
+    qty:         parseInt(document.getElementById('fQty').value)||1,
+    price:       parseFloat(document.getElementById('fPrice').value)||0,
+    notes:       document.getElementById('fNotes').value.trim(),
+    buy_url:     document.getElementById('fBuyUrl').value.trim(),
+    buy_label:   document.getElementById('fBuyLabel').value.trim(),
+    critical:    document.getElementById('fCritical').checked,
+    bought:      document.getElementById('fBought').checked,
+  };
+
+  try {
+    if (editId) {
+      await dbUpdate(editId, payload);
+      toast('Item updated');
+    } else {
+      await dbInsert(payload);
+      toast('Item added');
+    }
+    closeEdit();
+    await loadItems();
+  } catch(err) {
+    toast('Save failed: '+err.message, 'red');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editId ? 'Save Changes' : 'Add Item';
+  }
+}
+
+function closeEdit()    { document.getElementById('editModal').classList.remove('open'); }
+function closeEditIf(e) { if(e.target===document.getElementById('editModal')) closeEdit(); }
+
+/* ── DELETE ─────────────────────────────────────────── */
+function openDel(id) {
+  delId = id;
+  const r = rows.find(r=>r.id===id);
+  document.getElementById('delDesc').textContent = r?.description||'';
+  document.getElementById('delModal').classList.add('open');
+}
+
+async function confirmDel() {
+  if (!delId) return;
+  try {
+    await dbDelete(delId);
+    toast('Deleted', 'red');
+    delId = null;
+    closeDel();
+    await loadItems();
+  } catch(err) {
+    toast('Delete failed: '+err.message, 'red');
+  }
+}
+
+function closeDel()    { document.getElementById('delModal').classList.remove('open'); }
+function closeDelIf(e) { if(e.target===document.getElementById('delModal')) closeDel(); }
+
+/* ═══════════════════════════════════════════════════════
+   BUY BUTTON  (uses buy_url / buy_label from Supabase)
+═══════════════════════════════════════════════════════ */
+function buyBtn(row) {
+  const label = row.buy_label || '';
+  const url   = row.buy_url   || '';
+  if (!label && !url) return '';
+  const cls = buyBtnClass(label, url);
+  if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}">${e(label || url)}</a>`;
+  return `<span class="buy-btn ${cls}">${e(label)}</span>`;
+}
+
+function buyBtnClass(label, url) {
+  const s = (label + ' ' + url).toLowerCase();
+  if (/circuits-elec/i.test(s))             return 'green';
+  if (/ram-e-shop|ram electronics/i.test(s)) return 'teal';
+  if (/uge-one|uge electronics/i.test(s))    return 'slate';
+  if (/microohm/i.test(s))                   return 'red';
+  if (/hdelectronics|hd electronics/i.test(s)) return 'teal';
+  if (/pharmacy/i.test(s))                   return 'purple';
+  if (/print shop/i.test(s))                 return 'navy';
+  if (/owned/i.test(s))                      return 'grey';
+  return 'slate';
+}
+
+/* ═══════════════════════════════════════════════════════
+   REPORTS
+═══════════════════════════════════════════════════════ */
+function showReport(type) {
+  const now = new Date().toLocaleDateString('en-GB');
+  let html = '';
+
+  if (type==='shopping') {
+    const rem = rows.filter(r=>!r.bought);
+    const byStore = {};
+    rem.forEach(r=>{const k=r.source||'Unknown';if(!byStore[k])byStore[k]=[];byStore[k].push(r);});
+    const grand = rem.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
+    html = `<div class="rpt-section">
+      <div class="rpt-title">🛒 Shopping List — by Store</div>
+      <div class="rpt-date">Generated ${now} · ${rem.length} items remaining</div>
+      ${Object.entries(byStore).map(([store,its])=>{
+        const st=its.reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
+        return `<div class="rpt-group">
+          <div class="rpt-group-title">📍 ${e(store)}</div>
+          <table class="rpt-table">
+            <thead><tr><th>Ref</th><th>Description</th><th class="td-num">Qty</th><th class="td-num">Unit LE</th><th class="td-num">Total LE</th></tr></thead>
+            <tbody>
+              ${its.map(i=>`<tr>
+                <td><span class="ref-tag">${e(i.ref||'—')}</span></td>
+                <td>${e(i.description||'')}${i.critical?' <span class="crit-badge">⚠</span>':''}</td>
+                <td class="td-num">${i.qty||0}</td>
+                <td class="td-num">${(i.price||0).toLocaleString()}</td>
+                <td class="td-num">${((i.qty||0)*(i.price||0)).toLocaleString()}</td>
+              </tr>`).join('')}
+              <tr class="rpt-subtotal"><td colspan="4"><strong>Subtotal — ${e(store)}</strong></td><td class="td-num"><strong>${st.toLocaleString()} LE</strong></td></tr>
+            </tbody>
+          </table>
+        </div>`;
+      }).join('')}
+      <div class="rpt-grand">Grand total remaining: <strong>${grand.toLocaleString()} LE</strong></div>
+    </div>`;
+
+  } else if (type==='cost') {
+    const catG={};
+    rows.forEach(r=>{const k=r.category||'—';if(!catG[k])catG[k]=[];catG[k].push(r);});
+    const grand=rows.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
+    html = `<div class="rpt-section">
+      <div class="rpt-title">💰 Cost Breakdown — by Category</div>
+      <div class="rpt-date">Generated ${now} · ${rows.length} total items</div>
+      <table class="rpt-table">
+        <thead><tr><th>Category</th><th class="td-num">Items</th><th class="td-num">Purchased</th><th class="td-num">Total LE</th><th class="td-num">Remaining LE</th></tr></thead>
+        <tbody>
+          ${Object.entries(catG).map(([cat,its])=>{
+            const total=its.reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
+            const spent=its.filter(i=>i.bought).reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
+            return `<tr><td>${cat}</td><td class="td-num">${its.length}</td><td class="td-num">${its.filter(i=>i.bought).length}</td><td class="td-num">${total.toLocaleString()}</td><td class="td-num">${(total-spent).toLocaleString()}</td></tr>`;
+          }).join('')}
+          <tr class="rpt-subtotal">
+            <td><strong>TOTAL</strong></td>
+            <td class="td-num"><strong>${rows.length}</strong></td>
+            <td class="td-num"><strong>${rows.filter(r=>r.bought).length}</strong></td>
+            <td class="td-num"><strong>${grand.toLocaleString()}</strong></td>
+            <td class="td-num"><strong>${rows.filter(r=>!r.bought).reduce((s,r)=>s+(r.qty||0)*(r.price||0),0).toLocaleString()}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  } else if (type==='critical') {
+    const crit=rows.filter(r=>r.critical&&!r.bought);
+    html=`<div class="rpt-section">
+      <div class="rpt-title">⚠ Critical Items — Unpurchased</div>
+      <div class="rpt-date">Generated ${now} · ${crit.length} critical item${crit.length!==1?'s':''} remaining</div>
+      ${crit.length===0?'<p style="color:var(--green);font-weight:600">All critical items purchased ✓</p>':`
+      <table class="rpt-table">
+        <thead><tr><th>Ref</th><th>Description</th><th>Category</th><th>Source</th><th class="td-num">Total LE</th></tr></thead>
+        <tbody>${crit.map(r=>`<tr>
+          <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
+          <td>${e(r.description||'')}</td><td>${e(r.category||'')}</td><td>${e(r.source||'')}</td>
+          <td class="td-num">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div class="rpt-grand">Total critical remaining: <strong>${crit.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0).toLocaleString()} LE</strong></div>`}
+    </div>`;
+  }
+
+  document.getElementById('rptOutput').innerHTML = html;
+  setTab('reports');
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   COPY SCHEMA SQL
+═══════════════════════════════════════════════════════ */
+function copySchema() {
+  navigator.clipboard.writeText(SCHEMA_SQL).then(
+    () => toast('Schema SQL copied to clipboard'),
+    () => { prompt('Copy this SQL:', SCHEMA_SQL); }
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   HTML ESCAPE
+═══════════════════════════════════════════════════════ */
+function e(str) {
+  return String(str??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════ */
+function toast(msg, type='green') {
+  const el = document.createElement('div');
+  el.className = 'toast' + (type!=='green' ? ' '+type : '');
+  el.textContent = msg;
+  document.getElementById('toastStack').appendChild(el);
+  setTimeout(() => el.remove(), 3400);
+}
+</script>
+</body>
+</html>
