@@ -229,8 +229,8 @@ body{
 
 /* column widths */
 .col-chk{width:34px;text-align:center}
+.col-sel{width:30px;text-align:center}
 .col-num{width:38px;text-align:right}
-.col-ref{width:82px}
 .col-src{width:110px}
 .col-qty{width:46px;text-align:right}
 .col-price{width:70px;text-align:right;font-variant-numeric:tabular-nums}
@@ -249,8 +249,7 @@ td.col-num,td.col-qty,td.col-price,td.col-total{text-align:right;font-variant-nu
 }
 .cb-buy:hover{opacity:1;border-color:var(--blue);background:var(--blue-bg)}
 
-/* ── REF TAG / SOURCE PILL ──────────────────────────────── */
-.ref-tag{font-family:monospace;font-size:10.5px;background:var(--surface2);border:1px solid var(--border);padding:2px 5px;border-radius:4px;color:var(--text2);white-space:nowrap}
+/* ── SOURCE PILL ────────────────────────────────────────── */
 .source-pill{font-size:10.5px;padding:1px 6px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text3);white-space:nowrap;display:inline-block}
 .crit-badge{font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.2px}
 
@@ -351,6 +350,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
     <button class="tab-btn" id="tbtn-items"   onclick="setTab('items')">📋 Items</button>
     <button class="tab-btn" id="tbtn-reports" onclick="setTab('reports')">📄 Reports</button>
     <button class="tab-btn" id="tbtn-inventory" onclick="setTab('inventory')">📦 Inventory</button>
+    <button class="tab-btn" id="tbtn-trash" onclick="setTab('trash')">🗑 Trash</button>
   </nav>
 
   <div class="hdr-right">
@@ -414,6 +414,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
         <option value="critical">⚠ Critical</option>
       </select>
       <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" id="bulkMoveBtn" style="display:none" onclick="bulkMoveToInventory()">📦 Move to Inventory</button>
       <span class="count-badge" id="countBadge"></span>
       <button class="btn btn-primary btn-sm" onclick="openAdd()">+ Add Item</button>
     </div>
@@ -421,10 +422,10 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <table class="data-table">
         <thead>
           <tr>
+            <th class="col-sel"><input type="checkbox" id="selectAllChk" onchange="toggleSelectAll(this.checked)" title="Select all"></th>
             <th class="col-chk" title="Mark purchased"></th>
             <th class="col-num"   onclick="sortBy('pos')"        >#    <span class="sort-arrow" id="sa-pos"></span></th>
-            <th class="col-ref"   onclick="sortBy('ref')"        >Ref  <span class="sort-arrow" id="sa-ref"></span></th>
-            <th class="col-desc"  onclick="sortBy('description')">Description <span class="sort-arrow" id="sa-description"></span></th>
+            <th class="col-desc"  onclick="sortBy('name')"       >Name <span class="sort-arrow" id="sa-name"></span></th>
             <th class="col-src"   onclick="sortBy('source')"     >Source <span class="sort-arrow" id="sa-source"></span></th>
             <th class="col-qty"   onclick="sortBy('qty')"        >Qty  <span class="sort-arrow" id="sa-qty"></span></th>
             <th class="col-price" onclick="sortBy('price')"      >LE/unit <span class="sort-arrow" id="sa-price"></span></th>
@@ -472,8 +473,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
         <thead>
           <tr>
             <th class="col-num"   onclick="invSortBy('id')"         >#    <span class="sort-arrow" id="isa-id"></span></th>
-            <th class="col-ref"   onclick="invSortBy('ref')"        >Ref  <span class="sort-arrow" id="isa-ref"></span></th>
-            <th class="col-desc"  onclick="invSortBy('description')">Description <span class="sort-arrow" id="isa-description"></span></th>
+            <th class="col-desc"  onclick="invSortBy('name')"       >Name <span class="sort-arrow" id="isa-name"></span></th>
             <th class="col-src"   onclick="invSortBy('source')"     >Source <span class="sort-arrow" id="isa-source"></span></th>
             <th class="col-qty"   onclick="invSortBy('qty')"        >Qty  <span class="sort-arrow" id="isa-qty"></span></th>
             <th class="col-price" onclick="invSortBy('price')"      >LE/unit <span class="sort-arrow" id="isa-price"></span></th>
@@ -488,6 +488,34 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
   </div>
 </div>
 
+<!-- TRASH ────────────────────────────────────────────── -->
+<div id="tab-trash" class="tab-content">
+  <div class="page-inner">
+    <div class="toolbar">
+      <span class="spacer"></span>
+      <span class="count-badge" id="trashCountBadge"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-desc">Name</th>
+            <th class="col-src">From</th>
+            <th class="col-qty">Qty</th>
+            <th class="col-price">LE/unit</th>
+            <th class="col-total">Total</th>
+            <th class="col-src">Deleted</th>
+            <th class="col-act"></th>
+          </tr>
+        </thead>
+        <tbody id="trashTableBody"></tbody>
+      </table>
+    </div>
+    <div class="tbl-footer" id="trashTblFooter"></div>
+  </div>
+</div>
+
 </main>
 
 <!-- ── ADD / EDIT MODAL ──────────────────────────────── -->
@@ -497,13 +525,9 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
     <form id="editForm" onsubmit="saveItem(event)">
       <div class="form-grid">
         <div class="form-group span2">
-          <label class="form-label">Description *</label>
-          <input type="text" id="fDesc" class="form-input" required placeholder="e.g. BTS7960B Motor Driver IC" oninput="checkInventoryMatch()">
-          <p id="fDescHint" style="font-size:11px;color:var(--blue);margin-top:4px;min-height:14px"></p>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ref Designator</label>
-          <input type="text" id="fRef" class="form-input" placeholder="e.g. U1,U2">
+          <label class="form-label">Name *</label>
+          <input type="text" id="fName" class="form-input" required placeholder="e.g. BTS7960B Motor Driver IC" oninput="checkInventoryMatch()">
+          <p id="fNameHint" style="font-size:11px;color:var(--blue);margin-top:4px;min-height:14px"></p>
         </div>
         <div class="form-group">
           <label class="form-label">Category</label>
@@ -551,7 +575,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
   <div class="modal" style="max-width:380px">
     <div class="modal-title">Delete Item?</div>
     <p id="delDesc" style="color:var(--text2);font-size:13px;margin-bottom:6px"></p>
-    <p style="color:var(--text3);font-size:12px">This will permanently delete the row from Supabase.</p>
+    <p style="color:var(--text3);font-size:12px">It'll move to the 🗑 Trash tab, where you can restore it later.</p>
     <div class="modal-footer">
       <button type="button" class="btn btn-ghost" onclick="closeDel()">Cancel</button>
       <button type="button" class="btn btn-danger" onclick="confirmDel()">Delete</button>
@@ -657,10 +681,12 @@ const SOURCE_GROUPS = [
 let sb      = null;
 let rows    = [];   // wishlist (bom_items)
 let invRows = [];   // inventory (owned items)
+let delRows = [];   // trash (deleted_items)
 let sortCol = null, sortDir = 1;
 let invSortCol = null, invSortDir = 1;
 let editId = null, editTarget = 'wishlist';
 let delId  = null, delTarget  = 'wishlist';
+let selectedWishlist = new Set();
 
 /* ═══════════════════════════════════════════════════════
    PIN + INIT
@@ -756,7 +782,7 @@ async function connect(url, key, silent = false) {
 }
 
 function disconnect() {
-  sb = null; rows = [];
+  sb = null; rows = []; invRows = []; delRows = []; selectedWishlist = new Set();
   localStorage.removeItem('bom-sb-url');
   localStorage.removeItem('bom-sb-key');
   document.getElementById('pinState').style.display     = 'flex';
@@ -772,19 +798,24 @@ function disconnect() {
 ═══════════════════════════════════════════════════════ */
 async function loadItems() {
   setBusy(true);
-  const [wish, inv] = await Promise.all([
+  const [wish, inv, trash] = await Promise.all([
     sb.from('bom_items').select('*').order('pos').order('id'),
     sb.from('inventory').select('*').order('id'),
+    sb.from('deleted_items').select('*').order('deleted_at', { ascending: false }),
   ]);
   setBusy(false);
-  if (wish.error) { toast('Load failed: ' + wish.error.message, 'red'); return; }
-  if (inv.error)  { toast('Load failed: ' + inv.error.message, 'red'); return; }
-  rows    = wish.data || [];
-  invRows = inv.data  || [];
+  if (wish.error)  { toast('Load failed: ' + wish.error.message, 'red'); return; }
+  if (inv.error)   { toast('Load failed: ' + inv.error.message, 'red'); return; }
+  if (trash.error) { toast('Load failed: ' + trash.error.message, 'red'); return; }
+  rows    = wish.data  || [];
+  invRows = inv.data   || [];
+  delRows = trash.data || [];
+  for (const id of [...selectedWishlist]) if (!rows.some(r => r.id === id)) selectedWishlist.delete(id);
   populateFilters();
   renderItems();
   renderDashboard();
   renderInventory();
+  renderTrash();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -802,6 +833,8 @@ async function dbUpdate(id, payload) {
 }
 
 async function dbDelete(id) {
+  const r = rows.find(r => r.id === id);
+  if (r) await archiveDeleted(r, 'wishlist');
   const { error } = await sb.from('bom_items').delete().eq('id', id);
   if (error) throw error;
 }
@@ -810,8 +843,9 @@ async function dbDelete(id) {
    SUPABASE — CRUD (inventory)
 ═══════════════════════════════════════════════════════ */
 async function invInsert(payload) {
-  const { error } = await sb.from('inventory').insert(payload);
+  const { data, error } = await sb.from('inventory').insert(payload).select().single();
   if (error) throw error;
+  return data;
 }
 
 async function invUpdate(id, payload) {
@@ -820,31 +854,84 @@ async function invUpdate(id, payload) {
 }
 
 async function invDelete(id) {
+  const r = invRows.find(r => r.id === id);
+  if (r) await archiveDeleted(r, 'inventory');
   const { error } = await sb.from('inventory').delete().eq('id', id);
   if (error) throw error;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUPABASE — TRASH ARCHIVE
+   every delete copies the row into deleted_items first,
+   so nothing is ever permanently lost by accident
+═══════════════════════════════════════════════════════ */
+async function archiveDeleted(row, sourceTable) {
+  const { error } = await sb.from('deleted_items').insert({
+    source_table: sourceTable,
+    original_id:  row.id,
+    name:      row.name,
+    category:  row.category,
+    source:    row.source,
+    qty:       row.qty,
+    price:     row.price,
+    notes:     row.notes,
+    critical:  row.critical ?? null,
+    buy_url:   row.buy_url ?? null,
+    buy_label: row.buy_label ?? null,
+  });
+  if (error) throw error;
+}
+
+async function restoreItem(id) {
+  const r = delRows.find(x => x.id === id); if (!r) return;
+  const dest = r.source_table === 'inventory' ? 'inventory' : 'wishlist';
+  if (!confirm(`Restore "${r.name}" to your ${dest === 'inventory' ? 'inventory' : 'wishlist'}?`)) return;
+  try {
+    const base = { name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes };
+    if (dest === 'inventory') await invInsert(base);
+    else await dbInsert({ ...base, critical: r.critical || false, buy_url: r.buy_url || '', buy_label: r.buy_label || '' });
+    const { error } = await sb.from('deleted_items').delete().eq('id', id);
+    if (error) throw error;
+    toast('Item restored ↩');
+    await loadItems();
+  } catch (err) {
+    toast('Restore failed: ' + err.message, 'red');
+  }
+}
+
+async function purgeItem(id) {
+  if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+  try {
+    const { error } = await sb.from('deleted_items').delete().eq('id', id);
+    if (error) throw error;
+    toast('Permanently deleted', 'red');
+    await loadItems();
+  } catch (err) {
+    toast('Delete failed: ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
    MARK PURCHASED — moves a wishlist item into inventory,
    merging quantities with a matching item if one exists
 ═══════════════════════════════════════════════════════ */
-function findInventoryMatch(description) {
-  const key = (description||'').trim().toLowerCase();
+function findInventoryMatch(name) {
+  const key = (name||'').trim().toLowerCase();
   if (!key) return null;
-  return invRows.find(x => (x.description||'').trim().toLowerCase() === key) || null;
+  return invRows.find(x => (x.name||'').trim().toLowerCase() === key) || null;
 }
 
 async function markPurchased(id) {
   const r = rows.find(r=>r.id===id); if(!r) return;
-  if (!confirm(`Mark "${r.description}" as purchased?\nIt will move from your wishlist into your inventory.`)) return;
+  if (!confirm(`Mark "${r.name}" as purchased?\nIt will move from your wishlist into your inventory.`)) return;
 
   try {
-    const match = findInventoryMatch(r.description);
+    const match = findInventoryMatch(r.name);
     if (match) {
       await invUpdate(match.id, { qty: (match.qty||0) + (r.qty||0) });
     } else {
       await invInsert({
-        ref: r.ref, description: r.description, category: r.category,
+        name: r.name, category: r.category,
         source: r.source, qty: r.qty, price: r.price, notes: r.notes,
       });
     }
@@ -853,6 +940,63 @@ async function markPurchased(id) {
     await loadItems();
   } catch(err) {
     toast('Move failed: '+err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   BULK MOVE — move every selected wishlist row into
+   inventory in one go, merging quantities along the way
+═══════════════════════════════════════════════════════ */
+function toggleSelectRow(id, checked) {
+  if (checked) selectedWishlist.add(id); else selectedWishlist.delete(id);
+  updateBulkBar();
+}
+
+function toggleSelectAll(checked) {
+  selectedWishlist = checked ? new Set(rows.map(r => r.id)) : new Set();
+  renderItems();
+}
+
+function updateBulkBar() {
+  const btn = document.getElementById('bulkMoveBtn');
+  if (!btn) return;
+  btn.style.display = selectedWishlist.size ? 'inline-flex' : 'none';
+  btn.textContent = `📦 Move ${selectedWishlist.size} to Inventory`;
+  const all = document.getElementById('selectAllChk');
+  if (all) all.checked = rows.length > 0 && selectedWishlist.size === rows.length;
+}
+
+async function bulkMoveToInventory() {
+  const ids = [...selectedWishlist];
+  if (!ids.length) return;
+  if (!confirm(`Move ${ids.length} item(s) from your wishlist into your inventory?`)) return;
+
+  try {
+    const working = invRows.map(r => ({ id: r.id, name: r.name, qty: r.qty }));
+    let moved = 0;
+    for (const id of ids) {
+      const r = rows.find(x => x.id === id); if (!r) continue;
+      const key = (r.name||'').trim().toLowerCase();
+      const match = working.find(x => (x.name||'').trim().toLowerCase() === key);
+      if (match) {
+        const newQty = (match.qty||0) + (r.qty||0);
+        await invUpdate(match.id, { qty: newQty });
+        match.qty = newQty;
+      } else {
+        const created = await invInsert({
+          name: r.name, category: r.category,
+          source: r.source, qty: r.qty, price: r.price, notes: r.notes,
+        });
+        working.push({ id: created.id, name: created.name, qty: created.qty });
+      }
+      await dbDelete(r.id);
+      moved++;
+    }
+    selectedWishlist.clear();
+    toast(`Moved ${moved} item${moved!==1?'s':''} to inventory 📦`);
+    await loadItems();
+  } catch(err) {
+    toast('Bulk move failed: '+err.message, 'red');
   }
 }
 
@@ -885,6 +1029,7 @@ function setTab(name) {
   if (name === 'dashboard') renderDashboard();
   if (name === 'items')     renderItems();
   if (name === 'inventory') renderInventory();
+  if (name === 'trash')     renderTrash();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -974,8 +1119,7 @@ function renderItems() {
 
   let items = rows.map((r, i) => ({...r, _idx: i}));
   if (search) items = items.filter(r =>
-    (r.description||'').toLowerCase().includes(search) ||
-    (r.ref||'').toLowerCase().includes(search) ||
+    (r.name||'').toLowerCase().includes(search) ||
     (r.notes||'').toLowerCase().includes(search) ||
     (r.source||'').toLowerCase().includes(search));
   if (fCat)  items = items.filter(r => r.category === fCat);
@@ -985,13 +1129,12 @@ function renderItems() {
   if (sortCol) {
     items.sort((a, b) => {
       let av, bv;
-      if      (sortCol==='pos')         { av=a.pos||0;        bv=b.pos||0; }
-      else if (sortCol==='ref')         { av=a.ref||'';       bv=b.ref||''; }
-      else if (sortCol==='description') { av=a.description||''; bv=b.description||''; }
-      else if (sortCol==='source')      { av=a.source||'';    bv=b.source||''; }
-      else if (sortCol==='qty')         { av=a.qty||0;        bv=b.qty||0; }
-      else if (sortCol==='price')       { av=a.price||0;      bv=b.price||0; }
-      else if (sortCol==='total')       { av=(a.qty||0)*(a.price||0); bv=(b.qty||0)*(b.price||0); }
+      if      (sortCol==='pos')    { av=a.pos||0;        bv=b.pos||0; }
+      else if (sortCol==='name')   { av=a.name||'';      bv=b.name||''; }
+      else if (sortCol==='source') { av=a.source||'';    bv=b.source||''; }
+      else if (sortCol==='qty')    { av=a.qty||0;        bv=b.qty||0; }
+      else if (sortCol==='price')  { av=a.price||0;      bv=b.price||0; }
+      else if (sortCol==='total')  { av=(a.qty||0)*(a.price||0); bv=(b.qty||0)*(b.price||0); }
       if (typeof av==='string') return sortDir*av.localeCompare(bv);
       return sortDir*(av-bv);
     });
@@ -1004,10 +1147,10 @@ function renderItems() {
   document.getElementById('tableBody').innerHTML = items.map(r => {
     n++;
     return `<tr>
+      <td class="col-sel"><input type="checkbox" ${selectedWishlist.has(r.id)?'checked':''} onchange="toggleSelectRow(${r.id}, this.checked)"></td>
       <td class="col-chk"><button class="cb-buy" onclick="markPurchased(${r.id})" title="Mark purchased — moves to inventory">🛒</button></td>
       <td class="col-num">${n}</td>
-      <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
-      <td class="col-desc">${e(r.description||'')}</td>
+      <td class="col-desc">${e(r.name||'')}</td>
       <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
       <td class="col-qty">${r.qty||0}</td>
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
@@ -1027,7 +1170,9 @@ function renderItems() {
     `<span>${items.length} item${items.length!==1?'s':''}</span>
      <span>Still needed <strong>${tc.toLocaleString()} LE</strong> · Already in inventory <strong>${sc.toLocaleString()} LE</strong></span>`;
 
-  ['pos','ref','description','source','qty','price','total'].forEach(col => {
+  updateBulkBar();
+
+  ['pos','name','source','qty','price','total'].forEach(col => {
     const el = document.getElementById('sa-'+col);
     if (el) el.textContent = col===sortCol ? (sortDir===1?'↑':'↓') : '';
   });
@@ -1053,8 +1198,7 @@ function renderInventory() {
 
   let items = invRows.map((r,i) => ({...r, _idx:i}));
   if (search) items = items.filter(r =>
-    (r.description||'').toLowerCase().includes(search) ||
-    (r.ref||'').toLowerCase().includes(search) ||
+    (r.name||'').toLowerCase().includes(search) ||
     (r.notes||'').toLowerCase().includes(search) ||
     (r.source||'').toLowerCase().includes(search));
   if (fCat) items = items.filter(r => r.category === fCat);
@@ -1063,13 +1207,12 @@ function renderInventory() {
   if (invSortCol) {
     items.sort((a, b) => {
       let av, bv;
-      if      (invSortCol==='id')          { av=a.id||0;         bv=b.id||0; }
-      else if (invSortCol==='ref')         { av=a.ref||'';       bv=b.ref||''; }
-      else if (invSortCol==='description') { av=a.description||''; bv=b.description||''; }
-      else if (invSortCol==='source')      { av=a.source||'';    bv=b.source||''; }
-      else if (invSortCol==='qty')         { av=a.qty||0;        bv=b.qty||0; }
-      else if (invSortCol==='price')       { av=a.price||0;      bv=b.price||0; }
-      else if (invSortCol==='total')       { av=(a.qty||0)*(a.price||0); bv=(b.qty||0)*(b.price||0); }
+      if      (invSortCol==='id')     { av=a.id||0;         bv=b.id||0; }
+      else if (invSortCol==='name')   { av=a.name||'';      bv=b.name||''; }
+      else if (invSortCol==='source') { av=a.source||'';    bv=b.source||''; }
+      else if (invSortCol==='qty')    { av=a.qty||0;        bv=b.qty||0; }
+      else if (invSortCol==='price')  { av=a.price||0;      bv=b.price||0; }
+      else if (invSortCol==='total')  { av=(a.qty||0)*(a.price||0); bv=(b.qty||0)*(b.price||0); }
       if (typeof av==='string') return invSortDir*av.localeCompare(bv);
       return invSortDir*(av-bv);
     });
@@ -1082,8 +1225,7 @@ function renderInventory() {
     n++;
     return `<tr>
       <td class="col-num">${n}</td>
-      <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
-      <td class="col-desc">${e(r.description||'')}</td>
+      <td class="col-desc">${e(r.name||'')}</td>
       <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
       <td class="col-qty">${r.qty||0}</td>
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
@@ -1093,14 +1235,14 @@ function renderInventory() {
         <button class="btn-icon del" onclick="openDel(${r.id},'inventory')" title="Delete">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="8"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — mark a wishlist item as purchased to move it here, or add one directly</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="7"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — mark a wishlist item as purchased to move it here, or add one directly</p></div></td></tr>`;
 
   const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   document.getElementById('invTblFooter').innerHTML =
     `<span>${items.length} item${items.length!==1?'s':''}</span>
      <span>Total value <strong>${tc.toLocaleString()} LE</strong></span>`;
 
-  ['id','ref','description','source','qty','price','total'].forEach(col => {
+  ['id','name','source','qty','price','total'].forEach(col => {
     const el = document.getElementById('isa-'+col);
     if (el) el.textContent = col===invSortCol ? (invSortDir===1?'↑':'↓') : '';
   });
@@ -1114,6 +1256,40 @@ function renderInventory() {
 function invSortBy(col) {
   if (invSortCol===col) invSortDir*=-1; else {invSortCol=col; invSortDir=1;}
   renderInventory();
+}
+
+/* ═══════════════════════════════════════════════════════
+   TRASH TABLE — deleted items archive
+═══════════════════════════════════════════════════════ */
+function renderTrash() {
+  const body = document.getElementById('trashTableBody');
+  if (!body) return;
+
+  let n=0;
+  body.innerHTML = delRows.map(r => {
+    n++;
+    const when = r.deleted_at ? new Date(r.deleted_at).toLocaleString() : '';
+    const from = r.source_table === 'inventory' ? '📦 Inventory' : '🛒 Wishlist';
+    return `<tr>
+      <td class="col-num">${n}</td>
+      <td class="col-desc">${e(r.name||'')}</td>
+      <td class="col-src"><span class="source-pill">${from}</span></td>
+      <td class="col-qty">${r.qty||0}</td>
+      <td class="col-price">${(r.price||0).toLocaleString()}</td>
+      <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
+      <td class="col-src" style="font-size:11px;color:var(--text3)">${when}</td>
+      <td class="col-act"><div class="row-actions">
+        <button class="btn-icon" onclick="restoreItem(${r.id})" title="Restore">↩</button>
+        <button class="btn-icon del" onclick="purgeItem(${r.id})" title="Delete forever">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="8"><div class="inline-empty"><div class="icon">🗑</div><p>Trash is empty — deleted items land here so you can restore them later</p></div></td></tr>`;
+
+  document.getElementById('trashCountBadge').textContent = `${delRows.length} deleted item${delRows.length!==1?'s':''}`;
+  const tc = delRows.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
+  document.getElementById('trashTblFooter').innerHTML =
+    `<span>${delRows.length} item${delRows.length!==1?'s':''}</span>
+     <span>Value <strong>${tc.toLocaleString()} LE</strong></span>`;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1147,9 +1323,9 @@ function syncSource() {
 }
 
 function checkInventoryMatch() {
-  const hint = document.getElementById('fDescHint');
+  const hint = document.getElementById('fNameHint');
   if (editTarget === 'inventory') { hint.textContent = ''; return; }
-  const match = findInventoryMatch(document.getElementById('fDesc').value);
+  const match = findInventoryMatch(document.getElementById('fName').value);
   hint.textContent = match ? `📦 You already have ${match.qty} of these in your inventory` : '';
 }
 
@@ -1161,7 +1337,7 @@ function openAdd(target = 'wishlist') {
   document.getElementById('editTitle').textContent = isInv ? 'Add Inventory Item' : 'Add Item';
   document.getElementById('saveBtn').textContent   = 'Add Item';
   document.getElementById('editForm').reset();
-  document.getElementById('fDescHint').textContent = '';
+  document.getElementById('fNameHint').textContent = '';
   populateStoreDropdowns();
   document.getElementById('editModal').classList.add('open');
 }
@@ -1174,8 +1350,7 @@ function openEdit(id, target = 'wishlist') {
   document.getElementById('editModalInner').classList.toggle('inventory-mode', isInv);
   document.getElementById('editTitle').textContent    = isInv ? 'Edit Inventory Item' : 'Edit Item';
   document.getElementById('saveBtn').textContent      = 'Save Changes';
-  document.getElementById('fDesc').value              = r.description||'';
-  document.getElementById('fRef').value               = r.ref||'';
+  document.getElementById('fName').value              = r.name||'';
   document.getElementById('fCatInput').value          = r.category||'';
   populateStoreDropdowns(r.source||'', r.buy_label||'');
   document.getElementById('fQty').value               = r.qty||1;
@@ -1184,7 +1359,7 @@ function openEdit(id, target = 'wishlist') {
   document.getElementById('fBuyUrl').value            = r.buy_url||'';
   document.getElementById('fBuyLabel').value          = r.buy_label||'';
   document.getElementById('fCritical').checked        = r.critical||false;
-  document.getElementById('fDescHint').textContent    = '';
+  document.getElementById('fNameHint').textContent    = '';
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -1195,16 +1370,14 @@ async function saveItem(ev) {
   const isInv = editTarget === 'inventory';
 
   const payload = isInv ? {
-    description: document.getElementById('fDesc').value.trim(),
-    ref:         document.getElementById('fRef').value.trim(),
+    name:        document.getElementById('fName').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
     source:      document.getElementById('fSourceModal').value,
     qty:         parseInt(document.getElementById('fQty').value)||1,
     price:       parseFloat(document.getElementById('fPrice').value)||0,
     notes:       document.getElementById('fNotes').value.trim(),
   } : {
-    description: document.getElementById('fDesc').value.trim(),
-    ref:         document.getElementById('fRef').value.trim(),
+    name:        document.getElementById('fName').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
     source:      document.getElementById('fSourceModal').value,
     qty:         parseInt(document.getElementById('fQty').value)||1,
@@ -1240,7 +1413,7 @@ function openDel(id, target = 'wishlist') {
   delId = id;
   delTarget = target;
   const r = (target === 'inventory' ? invRows : rows).find(r=>r.id===id);
-  document.getElementById('delDesc').textContent = r?.description||'';
+  document.getElementById('delDesc').textContent = r?.name||'';
   document.getElementById('delModal').classList.add('open');
 }
 
@@ -1305,16 +1478,15 @@ function showReport(type) {
         return `<div class="rpt-group">
           <div class="rpt-group-title">📍 ${e(store)}</div>
           <table class="rpt-table">
-            <thead><tr><th>Ref</th><th>Description</th><th class="td-num">Qty</th><th class="td-num">Unit LE</th><th class="td-num">Total LE</th></tr></thead>
+            <thead><tr><th>Name</th><th class="td-num">Qty</th><th class="td-num">Unit LE</th><th class="td-num">Total LE</th></tr></thead>
             <tbody>
               ${its.map(i=>`<tr>
-                <td><span class="ref-tag">${e(i.ref||'—')}</span></td>
-                <td>${e(i.description||'')}${i.critical?' <span class="crit-badge">⚠</span>':''}</td>
+                <td>${e(i.name||'')}${i.critical?' <span class="crit-badge">⚠</span>':''}</td>
                 <td class="td-num">${i.qty||0}</td>
                 <td class="td-num">${(i.price||0).toLocaleString()}</td>
                 <td class="td-num">${((i.qty||0)*(i.price||0)).toLocaleString()}</td>
               </tr>`).join('')}
-              <tr class="rpt-subtotal"><td colspan="4"><strong>Subtotal — ${e(store)}</strong></td><td class="td-num"><strong>${st.toLocaleString()} LE</strong></td></tr>
+              <tr class="rpt-subtotal"><td colspan="3"><strong>Subtotal — ${e(store)}</strong></td><td class="td-num"><strong>${st.toLocaleString()} LE</strong></td></tr>
             </tbody>
           </table>
         </div>`;
@@ -1356,10 +1528,9 @@ function showReport(type) {
       <div class="rpt-date">Generated ${now} · ${crit.length} critical item${crit.length!==1?'s':''} remaining</div>
       ${crit.length===0?'<p style="color:var(--green);font-weight:600">All critical items purchased ✓</p>':`
       <table class="rpt-table">
-        <thead><tr><th>Ref</th><th>Description</th><th>Category</th><th>Source</th><th class="td-num">Total LE</th></tr></thead>
+        <thead><tr><th>Name</th><th>Category</th><th>Source</th><th class="td-num">Total LE</th></tr></thead>
         <tbody>${crit.map(r=>`<tr>
-          <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
-          <td>${e(r.description||'')}</td><td>${e(r.category||'')}</td><td>${e(r.source||'')}</td>
+          <td>${e(r.name||'')}</td><td>${e(r.category||'')}</td><td>${e(r.source||'')}</td>
           <td class="td-num">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
         </tr>`).join('')}</tbody>
       </table>
