@@ -226,7 +226,6 @@ body{
 .data-table td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:middle}
 .data-table tbody tr:last-child td{border-bottom:none}
 .data-table tbody tr:hover td{background:var(--surface2)}
-.data-table tbody tr.is-bought td{opacity:.45}
 
 /* column widths */
 .col-chk{width:34px;text-align:center}
@@ -237,26 +236,18 @@ body{
 .col-price{width:70px;text-align:right;font-variant-numeric:tabular-nums}
 .col-total{width:72px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .col-buy{width:126px}
-.col-inv{width:42px;text-align:center}
 .col-crit{width:50px;text-align:center}
 .col-act{width:72px;text-align:right}
 .col-desc{min-width:200px}
 td.col-num,td.col-qty,td.col-price,td.col-total{text-align:right;font-variant-numeric:tabular-nums}
 
-/* ── CHECKBOX ───────────────────────────────────────────── */
-.cb{
-  width:16px;height:16px;border:1.5px solid var(--border2);border-radius:4px;
+/* ── MARK PURCHASED BUTTON ──────────────────────────────── */
+.cb-buy{
+  width:24px;height:24px;border:1.5px solid var(--border2);border-radius:5px;
   background:transparent;cursor:pointer;display:inline-flex;align-items:center;
-  justify-content:center;transition:all .12s;flex-shrink:0;
+  justify-content:center;transition:all .12s;flex-shrink:0;font-size:12px;opacity:.55;
 }
-.cb.on{background:var(--green);border-color:var(--green)}
-.cb.on::after{content:'✓';color:#0d1117;font-size:10px;font-weight:800;line-height:1}
-.cb:hover:not(.on){border-color:var(--green);background:var(--green-bg)}
-
-/* ── INVENTORY TOGGLE ───────────────────────────────────── */
-.inv-toggle{width:27px;height:27px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;opacity:.4;transition:all .15s}
-.inv-toggle:hover{opacity:1;border-color:var(--blue);background:var(--blue-bg)}
-.inv-toggle.on{opacity:1;background:var(--blue-bg);border-color:var(--blue)}
+.cb-buy:hover{opacity:1;border-color:var(--blue);background:var(--blue-bg)}
 
 /* ── REF TAG / SOURCE PILL ──────────────────────────────── */
 .ref-tag{font-family:monospace;font-size:10.5px;background:var(--surface2);border:1px solid var(--border);padding:2px 5px;border-radius:4px;color:var(--text2);white-space:nowrap}
@@ -300,6 +291,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .form-group{display:flex;flex-direction:column;gap:5px}
 .form-group.span2{grid-column:1/-1}
+.modal.inventory-mode .wishlist-only{display:none}
 .form-label{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
 .form-input,.form-select,.form-textarea{padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;transition:border .15s;font-family:inherit}
 .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--blue)}
@@ -418,9 +410,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <select id="fCat"    class="filter-sel" onchange="renderItems()"><option value="">All Categories</option></select>
       <select id="fSource" class="filter-sel" onchange="renderItems()"><option value="">All Sources</option></select>
       <select id="fStatus" class="filter-sel" onchange="renderItems()">
-        <option value="">All Status</option>
-        <option value="needed">Needed</option>
-        <option value="bought">Purchased</option>
+        <option value="">All Items</option>
         <option value="critical">⚠ Critical</option>
       </select>
       <span class="spacer"></span>
@@ -431,7 +421,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <table class="data-table">
         <thead>
           <tr>
-            <th class="col-chk"></th>
+            <th class="col-chk" title="Mark purchased"></th>
             <th class="col-num"   onclick="sortBy('pos')"        >#    <span class="sort-arrow" id="sa-pos"></span></th>
             <th class="col-ref"   onclick="sortBy('ref')"        >Ref  <span class="sort-arrow" id="sa-ref"></span></th>
             <th class="col-desc"  onclick="sortBy('description')">Description <span class="sort-arrow" id="sa-description"></span></th>
@@ -440,7 +430,6 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
             <th class="col-price" onclick="sortBy('price')"      >LE/unit <span class="sort-arrow" id="sa-price"></span></th>
             <th class="col-total" onclick="sortBy('total')"      >Total <span class="sort-arrow" id="sa-total"></span></th>
             <th class="col-buy">Buy</th>
-            <th class="col-inv" title="Inventory">📦</th>
             <th class="col-crit">⚠</th>
             <th class="col-act"></th>
           </tr>
@@ -476,19 +465,19 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <select id="iSource" class="filter-sel" onchange="renderInventory()"><option value="">All Sources</option></select>
       <span class="spacer"></span>
       <span class="count-badge" id="invCountBadge"></span>
+      <button class="btn btn-primary btn-sm" onclick="openAdd('inventory')">+ Add Item</button>
     </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th class="col-num"   onclick="invSortBy('pos')"        >#    <span class="sort-arrow" id="isa-pos"></span></th>
+            <th class="col-num"   onclick="invSortBy('id')"         >#    <span class="sort-arrow" id="isa-id"></span></th>
             <th class="col-ref"   onclick="invSortBy('ref')"        >Ref  <span class="sort-arrow" id="isa-ref"></span></th>
             <th class="col-desc"  onclick="invSortBy('description')">Description <span class="sort-arrow" id="isa-description"></span></th>
             <th class="col-src"   onclick="invSortBy('source')"     >Source <span class="sort-arrow" id="isa-source"></span></th>
             <th class="col-qty"   onclick="invSortBy('qty')"        >Qty  <span class="sort-arrow" id="isa-qty"></span></th>
             <th class="col-price" onclick="invSortBy('price')"      >LE/unit <span class="sort-arrow" id="isa-price"></span></th>
             <th class="col-total" onclick="invSortBy('total')"      >Total <span class="sort-arrow" id="isa-total"></span></th>
-            <th class="col-inv" title="Remove from inventory">📦</th>
             <th class="col-act"></th>
           </tr>
         </thead>
@@ -503,13 +492,14 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 
 <!-- ── ADD / EDIT MODAL ──────────────────────────────── -->
 <div class="modal-overlay" id="editModal">
-  <div class="modal">
+  <div class="modal" id="editModalInner">
     <div class="modal-title" id="editTitle">Add Item</div>
     <form id="editForm" onsubmit="saveItem(event)">
       <div class="form-grid">
         <div class="form-group span2">
           <label class="form-label">Description *</label>
-          <input type="text" id="fDesc" class="form-input" required placeholder="e.g. BTS7960B Motor Driver IC">
+          <input type="text" id="fDesc" class="form-input" required placeholder="e.g. BTS7960B Motor Driver IC" oninput="checkInventoryMatch()">
+          <p id="fDescHint" style="font-size:11px;color:var(--blue);margin-top:4px;min-height:14px"></p>
         </div>
         <div class="form-group">
           <label class="form-label">Ref Designator</label>
@@ -536,17 +526,16 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
           <label class="form-label">Notes</label>
           <textarea id="fNotes" class="form-textarea" placeholder="Additional notes…"></textarea>
         </div>
-        <div class="form-group span2">
+        <div class="form-group span2 wishlist-only">
           <label class="form-label">Buy Link URL</label>
           <input type="url" id="fBuyUrl" class="form-input" placeholder="https://circuits-elec.com/products/...">
         </div>
-        <div class="form-group">
+        <div class="form-group wishlist-only">
           <label class="form-label">Buy Button Label</label>
           <select id="fBuyLabel" class="form-select" onchange="syncSource()"></select>
         </div>
-        <div class="form-group" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+        <div class="form-group wishlist-only" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
           <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
-          <label class="form-check"><input type="checkbox" id="fBought"> Already Purchased</label>
         </div>
       </div>
       <div class="modal-footer">
@@ -574,30 +563,6 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 <div class="toast-stack" id="toastStack"></div>
 
 <script>
-/* ═══════════════════════════════════════════════════════
-   SCHEMA SQL (shown in setup screen)
-═══════════════════════════════════════════════════════ */
-const SCHEMA_SQL = `-- Run once in Supabase SQL Editor
-create table if not exists bom_items (
-  id          bigserial primary key,
-  pos         integer default 0,
-  ref         text default '',
-  description text not null default '',
-  category    text default '',
-  source      text default '',
-  qty         integer default 1,
-  price       numeric(10,2) default 0,
-  notes       text default '',
-  critical    boolean default false,
-  bought      boolean default false,
-  created_at  timestamptz default now(),
-  updated_at  timestamptz default now()
-);
-
--- Allow all operations (single-user portal)
-alter table bom_items enable row level security;
-create policy "allow_all" on bom_items for all using (true) with check (true);`;
-
 const _X = { // retired — buy_url / buy_label now live in Supabase
   1:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/dc-motor-driver-bts7960-single-channel-43',              cls:'green'},
   2:  {label:'🟢 circuits-elec', url:'https://circuits-elec.com/products/drv8825-stepper-motor-driver',                           cls:'green'},
@@ -689,11 +654,13 @@ const SOURCE_GROUPS = [
 /* ═══════════════════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════════════════ */
-let sb   = null;
-let rows = [];
+let sb      = null;
+let rows    = [];   // wishlist (bom_items)
+let invRows = [];   // inventory (owned items)
 let sortCol = null, sortDir = 1;
 let invSortCol = null, invSortDir = 1;
-let editId = null, delId = null;
+let editId = null, editTarget = 'wishlist';
+let delId  = null, delTarget  = 'wishlist';
 
 /* ═══════════════════════════════════════════════════════
    PIN + INIT
@@ -805,10 +772,15 @@ function disconnect() {
 ═══════════════════════════════════════════════════════ */
 async function loadItems() {
   setBusy(true);
-  const { data, error } = await sb.from('bom_items').select('*').order('pos').order('id');
+  const [wish, inv] = await Promise.all([
+    sb.from('bom_items').select('*').order('pos').order('id'),
+    sb.from('inventory').select('*').order('id'),
+  ]);
   setBusy(false);
-  if (error) { toast('Load failed: ' + error.message, 'red'); return; }
-  rows = data || [];
+  if (wish.error) { toast('Load failed: ' + wish.error.message, 'red'); return; }
+  if (inv.error)  { toast('Load failed: ' + inv.error.message, 'red'); return; }
+  rows    = wish.data || [];
+  invRows = inv.data  || [];
   populateFilters();
   renderItems();
   renderDashboard();
@@ -816,7 +788,7 @@ async function loadItems() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   SUPABASE — CRUD
+   SUPABASE — CRUD (wishlist)
 ═══════════════════════════════════════════════════════ */
 async function dbInsert(payload) {
   const maxPos = rows.length ? Math.max(...rows.map(r => r.pos || 0)) : 0;
@@ -832,6 +804,56 @@ async function dbUpdate(id, payload) {
 async function dbDelete(id) {
   const { error } = await sb.from('bom_items').delete().eq('id', id);
   if (error) throw error;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUPABASE — CRUD (inventory)
+═══════════════════════════════════════════════════════ */
+async function invInsert(payload) {
+  const { error } = await sb.from('inventory').insert(payload);
+  if (error) throw error;
+}
+
+async function invUpdate(id, payload) {
+  const { error } = await sb.from('inventory').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+
+async function invDelete(id) {
+  const { error } = await sb.from('inventory').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/* ═══════════════════════════════════════════════════════
+   MARK PURCHASED — moves a wishlist item into inventory,
+   merging quantities with a matching item if one exists
+═══════════════════════════════════════════════════════ */
+function findInventoryMatch(description) {
+  const key = (description||'').trim().toLowerCase();
+  if (!key) return null;
+  return invRows.find(x => (x.description||'').trim().toLowerCase() === key) || null;
+}
+
+async function markPurchased(id) {
+  const r = rows.find(r=>r.id===id); if(!r) return;
+  if (!confirm(`Mark "${r.description}" as purchased?\nIt will move from your wishlist into your inventory.`)) return;
+
+  try {
+    const match = findInventoryMatch(r.description);
+    if (match) {
+      await invUpdate(match.id, { qty: (match.qty||0) + (r.qty||0) });
+    } else {
+      await invInsert({
+        ref: r.ref, description: r.description, category: r.category,
+        source: r.source, qty: r.qty, price: r.price, notes: r.notes,
+      });
+    }
+    await dbDelete(r.id);
+    toast('Moved to inventory 📦');
+    await loadItems();
+  } catch(err) {
+    toast('Move failed: '+err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -888,11 +910,12 @@ function populateFilters() {
    DASHBOARD
 ═══════════════════════════════════════════════════════ */
 function renderDashboard() {
-  const all   = rows;
+  // combine wishlist (still need) + inventory (already have) into one view
+  const all   = [...rows.map(r => ({...r, bought:false})), ...invRows.map(r => ({...r, bought:true}))];
   const bought = all.filter(r => r.bought);
   const total  = all.reduce((s, r) => s + (r.qty||0) * (r.price||0), 0);
   const spent  = bought.reduce((s, r) => s + (r.qty||0) * (r.price||0), 0);
-  const crit   = all.filter(r => r.critical && !r.bought).length;
+  const crit   = rows.filter(r => r.critical).length;
   const pct    = all.length ? Math.round(bought.length / all.length * 100) : 0;
 
   document.getElementById('statsGrid').innerHTML = [
@@ -957,9 +980,7 @@ function renderItems() {
     (r.source||'').toLowerCase().includes(search));
   if (fCat)  items = items.filter(r => r.category === fCat);
   if (fSrc)  { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>g.match(r.source||'')); }
-  if (fStat === 'needed')   items = items.filter(r => !r.bought);
-  if (fStat === 'bought')   items = items.filter(r => r.bought);
-  if (fStat === 'critical') items = items.filter(r => r.critical && !r.bought);
+  if (fStat === 'critical') items = items.filter(r => r.critical);
 
   if (sortCol) {
     items.sort((a, b) => {
@@ -982,8 +1003,8 @@ function renderItems() {
   let n=0;
   document.getElementById('tableBody').innerHTML = items.map(r => {
     n++;
-    return `<tr class="${r.bought?'is-bought':''}">
-      <td class="col-chk"><div class="cb ${r.bought?'on':''}" onclick="toggleBought(${r.id},${r.bought})"></div></td>
+    return `<tr>
+      <td class="col-chk"><button class="cb-buy" onclick="markPurchased(${r.id})" title="Mark purchased — moves to inventory">🛒</button></td>
       <td class="col-num">${n}</td>
       <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
       <td class="col-desc">${e(r.description||'')}</td>
@@ -992,20 +1013,19 @@ function renderItems() {
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
       <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
       <td class="col-buy">${buyBtn(r)}</td>
-      <td class="col-inv"><button class="inv-toggle ${r.in_inventory?'on':''}" onclick="toggleInventory(${r.id},${r.in_inventory})" title="${r.in_inventory ? 'In inventory — click to remove' : 'Add to inventory'}">📦</button></td>
       <td class="col-crit">${r.critical?'<span class="crit-badge">⚠</span>':''}</td>
       <td class="col-act"><div class="row-actions">
         <button class="btn-icon" onclick="openEdit(${r.id})" title="Edit">✎</button>
         <button class="btn-icon del" onclick="openDel(${r.id})" title="Delete">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="12"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="11"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
 
   const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
-  const sc = items.filter(r=>r.bought).reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
+  const sc = invRows.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   document.getElementById('tblFooter').innerHTML =
     `<span>${items.length} item${items.length!==1?'s':''}</span>
-     <span>Total <strong>${tc.toLocaleString()} LE</strong> · Spent <strong>${sc.toLocaleString()} LE</strong> · Remaining <strong>${(tc-sc).toLocaleString()} LE</strong></span>`;
+     <span>Still needed <strong>${tc.toLocaleString()} LE</strong> · Already in inventory <strong>${sc.toLocaleString()} LE</strong></span>`;
 
   ['pos','ref','description','source','qty','price','total'].forEach(col => {
     const el = document.getElementById('sa-'+col);
@@ -1031,7 +1051,7 @@ function renderInventory() {
   const fCat   = document.getElementById('iCat')?.value || '';
   const fSrc   = document.getElementById('iSource')?.value || '';
 
-  let items = rows.filter(r => r.in_inventory);
+  let items = invRows.map((r,i) => ({...r, _idx:i}));
   if (search) items = items.filter(r =>
     (r.description||'').toLowerCase().includes(search) ||
     (r.ref||'').toLowerCase().includes(search) ||
@@ -1043,7 +1063,7 @@ function renderInventory() {
   if (invSortCol) {
     items.sort((a, b) => {
       let av, bv;
-      if      (invSortCol==='pos')         { av=a.pos||0;        bv=b.pos||0; }
+      if      (invSortCol==='id')          { av=a.id||0;         bv=b.id||0; }
       else if (invSortCol==='ref')         { av=a.ref||'';       bv=b.ref||''; }
       else if (invSortCol==='description') { av=a.description||''; bv=b.description||''; }
       else if (invSortCol==='source')      { av=a.source||'';    bv=b.source||''; }
@@ -1068,19 +1088,19 @@ function renderInventory() {
       <td class="col-qty">${r.qty||0}</td>
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
       <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
-      <td class="col-inv"><button class="inv-toggle on" onclick="toggleInventory(${r.id},${r.in_inventory})" title="Remove from inventory">📦</button></td>
       <td class="col-act"><div class="row-actions">
-        <button class="btn-icon" onclick="openEdit(${r.id})" title="Edit">✎</button>
+        <button class="btn-icon" onclick="openEdit(${r.id},'inventory')" title="Edit">✎</button>
+        <button class="btn-icon del" onclick="openDel(${r.id},'inventory')" title="Delete">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="9"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — tick the 📦 button on any item to move it here</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="8"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — mark a wishlist item as purchased to move it here, or add one directly</p></div></td></tr>`;
 
   const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   document.getElementById('invTblFooter').innerHTML =
     `<span>${items.length} item${items.length!==1?'s':''}</span>
      <span>Total value <strong>${tc.toLocaleString()} LE</strong></span>`;
 
-  ['pos','ref','description','source','qty','price','total'].forEach(col => {
+  ['id','ref','description','source','qty','price','total'].forEach(col => {
     const el = document.getElementById('isa-'+col);
     if (el) el.textContent = col===invSortCol ? (invSortDir===1?'↑':'↓') : '';
   });
@@ -1097,39 +1117,7 @@ function invSortBy(col) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   TOGGLE BOUGHT
-═══════════════════════════════════════════════════════ */
-async function toggleBought(id, current) {
-  // Optimistic update
-  const r = rows.find(r=>r.id===id); if(r) r.bought = !current;
-  renderItems(); renderDashboard();
-  try {
-    await dbUpdate(id, { bought: !current });
-  } catch(err) {
-    if(r) r.bought = current; // rollback
-    renderItems(); renderDashboard();
-    toast('Save failed: '+err.message, 'red');
-  }
-}
-
-/* ═══════════════════════════════════════════════════════
-   TOGGLE INVENTORY
-═══════════════════════════════════════════════════════ */
-async function toggleInventory(id, current) {
-  const r = rows.find(r=>r.id===id); if(r) r.in_inventory = !current;
-  renderItems(); renderInventory();
-  toast(!current ? 'Added to inventory 📦' : 'Removed from inventory');
-  try {
-    await dbUpdate(id, { in_inventory: !current });
-  } catch(err) {
-    if(r) r.in_inventory = current; // rollback
-    renderItems(); renderInventory();
-    toast('Save failed: '+err.message, 'red');
-  }
-}
-
-/* ═══════════════════════════════════════════════════════
-   CRUD — ADD / EDIT
+   CRUD — ADD / EDIT (wishlist)
 ═══════════════════════════════════════════════════════ */
 function populateStoreDropdowns(selectedSource, selectedLabel) {
   const srcSel   = document.getElementById('fSourceModal');
@@ -1158,19 +1146,33 @@ function syncSource() {
   if (store) document.getElementById('fSourceModal').value = store.source;
 }
 
-function openAdd() {
+function checkInventoryMatch() {
+  const hint = document.getElementById('fDescHint');
+  if (editTarget === 'inventory') { hint.textContent = ''; return; }
+  const match = findInventoryMatch(document.getElementById('fDesc').value);
+  hint.textContent = match ? `📦 You already have ${match.qty} of these in your inventory` : '';
+}
+
+function openAdd(target = 'wishlist') {
   editId = null;
-  document.getElementById('editTitle').textContent = 'Add Item';
+  editTarget = target;
+  const isInv = target === 'inventory';
+  document.getElementById('editModalInner').classList.toggle('inventory-mode', isInv);
+  document.getElementById('editTitle').textContent = isInv ? 'Add Inventory Item' : 'Add Item';
   document.getElementById('saveBtn').textContent   = 'Add Item';
   document.getElementById('editForm').reset();
+  document.getElementById('fDescHint').textContent = '';
   populateStoreDropdowns();
   document.getElementById('editModal').classList.add('open');
 }
 
-function openEdit(id) {
+function openEdit(id, target = 'wishlist') {
   editId = id;
-  const r = rows.find(r=>r.id===id); if(!r) return;
-  document.getElementById('editTitle').textContent    = 'Edit Item';
+  editTarget = target;
+  const isInv = target === 'inventory';
+  const r = (isInv ? invRows : rows).find(r=>r.id===id); if(!r) return;
+  document.getElementById('editModalInner').classList.toggle('inventory-mode', isInv);
+  document.getElementById('editTitle').textContent    = isInv ? 'Edit Inventory Item' : 'Edit Item';
   document.getElementById('saveBtn').textContent      = 'Save Changes';
   document.getElementById('fDesc').value              = r.description||'';
   document.getElementById('fRef').value               = r.ref||'';
@@ -1182,7 +1184,7 @@ function openEdit(id) {
   document.getElementById('fBuyUrl').value            = r.buy_url||'';
   document.getElementById('fBuyLabel').value          = r.buy_label||'';
   document.getElementById('fCritical').checked        = r.critical||false;
-  document.getElementById('fBought').checked          = r.bought||false;
+  document.getElementById('fDescHint').textContent    = '';
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -1190,8 +1192,17 @@ async function saveItem(ev) {
   ev.preventDefault();
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  const isInv = editTarget === 'inventory';
 
-  const payload = {
+  const payload = isInv ? {
+    description: document.getElementById('fDesc').value.trim(),
+    ref:         document.getElementById('fRef').value.trim(),
+    category:    document.getElementById('fCatInput').value.trim(),
+    source:      document.getElementById('fSourceModal').value,
+    qty:         parseInt(document.getElementById('fQty').value)||1,
+    price:       parseFloat(document.getElementById('fPrice').value)||0,
+    notes:       document.getElementById('fNotes').value.trim(),
+  } : {
     description: document.getElementById('fDesc').value.trim(),
     ref:         document.getElementById('fRef').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
@@ -1202,15 +1213,14 @@ async function saveItem(ev) {
     buy_url:     document.getElementById('fBuyUrl').value.trim(),
     buy_label:   document.getElementById('fBuyLabel').value.trim(),
     critical:    document.getElementById('fCritical').checked,
-    bought:      document.getElementById('fBought').checked,
   };
 
   try {
     if (editId) {
-      await dbUpdate(editId, payload);
+      await (isInv ? invUpdate(editId, payload) : dbUpdate(editId, payload));
       toast('Item updated');
     } else {
-      await dbInsert(payload);
+      await (isInv ? invInsert(payload) : dbInsert(payload));
       toast('Item added');
     }
     closeEdit();
@@ -1226,9 +1236,10 @@ async function saveItem(ev) {
 function closeEdit()    { document.getElementById('editModal').classList.remove('open'); }
 
 /* ── DELETE ─────────────────────────────────────────── */
-function openDel(id) {
+function openDel(id, target = 'wishlist') {
   delId = id;
-  const r = rows.find(r=>r.id===id);
+  delTarget = target;
+  const r = (target === 'inventory' ? invRows : rows).find(r=>r.id===id);
   document.getElementById('delDesc').textContent = r?.description||'';
   document.getElementById('delModal').classList.add('open');
 }
@@ -1236,7 +1247,7 @@ function openDel(id) {
 async function confirmDel() {
   if (!delId) return;
   try {
-    await dbDelete(delId);
+    await (delTarget === 'inventory' ? invDelete(delId) : dbDelete(delId));
     toast('Deleted', 'red');
     delId = null;
     closeDel();
@@ -1282,7 +1293,7 @@ function showReport(type) {
   let html = '';
 
   if (type==='shopping') {
-    const rem = rows.filter(r=>!r.bought);
+    const rem = rows;
     const byStore = {};
     rem.forEach(r=>{const k=r.source||'Unknown';if(!byStore[k])byStore[k]=[];byStore[k].push(r);});
     const grand = rem.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
@@ -1312,33 +1323,34 @@ function showReport(type) {
     </div>`;
 
   } else if (type==='cost') {
+    const all = [...rows.map(r=>({...r,bought:false})), ...invRows.map(r=>({...r,bought:true}))];
     const catG={};
-    rows.forEach(r=>{const k=r.category||'—';if(!catG[k])catG[k]=[];catG[k].push(r);});
-    const grand=rows.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
+    all.forEach(r=>{const k=r.category||'—';if(!catG[k])catG[k]=[];catG[k].push(r);});
+    const grand=all.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
     html = `<div class="rpt-section">
       <div class="rpt-title">💰 Cost Breakdown — by Category</div>
-      <div class="rpt-date">Generated ${now} · ${rows.length} total items</div>
+      <div class="rpt-date">Generated ${now} · ${all.length} total items (wishlist + inventory)</div>
       <table class="rpt-table">
-        <thead><tr><th>Category</th><th class="td-num">Items</th><th class="td-num">Purchased</th><th class="td-num">Total LE</th><th class="td-num">Remaining LE</th></tr></thead>
+        <thead><tr><th>Category</th><th class="td-num">Items</th><th class="td-num">In Inventory</th><th class="td-num">Total LE</th><th class="td-num">Still Needed LE</th></tr></thead>
         <tbody>
           ${Object.entries(catG).map(([cat,its])=>{
             const total=its.reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
-            const spent=its.filter(i=>i.bought).reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
-            return `<tr><td>${cat}</td><td class="td-num">${its.length}</td><td class="td-num">${its.filter(i=>i.bought).length}</td><td class="td-num">${total.toLocaleString()}</td><td class="td-num">${(total-spent).toLocaleString()}</td></tr>`;
+            const remaining=its.filter(i=>!i.bought).reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
+            return `<tr><td>${cat}</td><td class="td-num">${its.length}</td><td class="td-num">${its.filter(i=>i.bought).length}</td><td class="td-num">${total.toLocaleString()}</td><td class="td-num">${remaining.toLocaleString()}</td></tr>`;
           }).join('')}
           <tr class="rpt-subtotal">
             <td><strong>TOTAL</strong></td>
-            <td class="td-num"><strong>${rows.length}</strong></td>
-            <td class="td-num"><strong>${rows.filter(r=>r.bought).length}</strong></td>
+            <td class="td-num"><strong>${all.length}</strong></td>
+            <td class="td-num"><strong>${invRows.length}</strong></td>
             <td class="td-num"><strong>${grand.toLocaleString()}</strong></td>
-            <td class="td-num"><strong>${rows.filter(r=>!r.bought).reduce((s,r)=>s+(r.qty||0)*(r.price||0),0).toLocaleString()}</strong></td>
+            <td class="td-num"><strong>${rows.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0).toLocaleString()}</strong></td>
           </tr>
         </tbody>
       </table>
     </div>`;
 
   } else if (type==='critical') {
-    const crit=rows.filter(r=>r.critical&&!r.bought);
+    const crit=rows.filter(r=>r.critical);
     html=`<div class="rpt-section">
       <div class="rpt-title">⚠ Critical Items — Unpurchased</div>
       <div class="rpt-date">Generated ${now} · ${crit.length} critical item${crit.length!==1?'s':''} remaining</div>
@@ -1363,13 +1375,6 @@ function showReport(type) {
 /* ═══════════════════════════════════════════════════════
    COPY SCHEMA SQL
 ═══════════════════════════════════════════════════════ */
-function copySchema() {
-  navigator.clipboard.writeText(SCHEMA_SQL).then(
-    () => toast('Schema SQL copied to clipboard'),
-    () => { prompt('Copy this SQL:', SCHEMA_SQL); }
-  );
-}
-
 /* ═══════════════════════════════════════════════════════
    HTML ESCAPE
 ═══════════════════════════════════════════════════════ */
