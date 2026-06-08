@@ -237,6 +237,7 @@ body{
 .col-price{width:70px;text-align:right;font-variant-numeric:tabular-nums}
 .col-total{width:72px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .col-buy{width:126px}
+.col-inv{width:42px;text-align:center}
 .col-crit{width:50px;text-align:center}
 .col-act{width:72px;text-align:right}
 .col-desc{min-width:200px}
@@ -251,6 +252,11 @@ td.col-num,td.col-qty,td.col-price,td.col-total{text-align:right;font-variant-nu
 .cb.on{background:var(--green);border-color:var(--green)}
 .cb.on::after{content:'✓';color:#0d1117;font-size:10px;font-weight:800;line-height:1}
 .cb:hover:not(.on){border-color:var(--green);background:var(--green-bg)}
+
+/* ── INVENTORY TOGGLE ───────────────────────────────────── */
+.inv-toggle{width:27px;height:27px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;opacity:.4;transition:all .15s}
+.inv-toggle:hover{opacity:1;border-color:var(--blue);background:var(--blue-bg)}
+.inv-toggle.on{opacity:1;background:var(--blue-bg);border-color:var(--blue)}
 
 /* ── REF TAG / SOURCE PILL ──────────────────────────────── */
 .ref-tag{font-family:monospace;font-size:10.5px;background:var(--surface2);border:1px solid var(--border);padding:2px 5px;border-radius:4px;color:var(--text2);white-space:nowrap}
@@ -352,6 +358,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
     <button class="tab-btn active" id="tbtn-dashboard" onclick="setTab('dashboard')">📊 Dashboard</button>
     <button class="tab-btn" id="tbtn-items"   onclick="setTab('items')">📋 Items</button>
     <button class="tab-btn" id="tbtn-reports" onclick="setTab('reports')">📄 Reports</button>
+    <button class="tab-btn" id="tbtn-inventory" onclick="setTab('inventory')">📦 Inventory</button>
   </nav>
 
   <div class="hdr-right">
@@ -433,6 +440,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
             <th class="col-price" onclick="sortBy('price')"      >LE/unit <span class="sort-arrow" id="sa-price"></span></th>
             <th class="col-total" onclick="sortBy('total')"      >Total <span class="sort-arrow" id="sa-total"></span></th>
             <th class="col-buy">Buy</th>
+            <th class="col-inv" title="Inventory">📦</th>
             <th class="col-crit">⚠</th>
             <th class="col-act"></th>
           </tr>
@@ -456,6 +464,38 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
     <div id="rptOutput">
       <div class="inline-empty"><div class="icon">📄</div><p>Select a report above</p></div>
     </div>
+  </div>
+</div>
+
+<!-- INVENTORY ────────────────────────────────────────── -->
+<div id="tab-inventory" class="tab-content">
+  <div class="page-inner">
+    <div class="toolbar">
+      <input type="search" id="iSearch" class="search-input" placeholder="🔍  Search inventory…" oninput="renderInventory()">
+      <select id="iCat"    class="filter-sel" onchange="renderInventory()"><option value="">All Categories</option></select>
+      <select id="iSource" class="filter-sel" onchange="renderInventory()"><option value="">All Sources</option></select>
+      <span class="spacer"></span>
+      <span class="count-badge" id="invCountBadge"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-num"   onclick="invSortBy('pos')"        >#    <span class="sort-arrow" id="isa-pos"></span></th>
+            <th class="col-ref"   onclick="invSortBy('ref')"        >Ref  <span class="sort-arrow" id="isa-ref"></span></th>
+            <th class="col-desc"  onclick="invSortBy('description')">Description <span class="sort-arrow" id="isa-description"></span></th>
+            <th class="col-src"   onclick="invSortBy('source')"     >Source <span class="sort-arrow" id="isa-source"></span></th>
+            <th class="col-qty"   onclick="invSortBy('qty')"        >Qty  <span class="sort-arrow" id="isa-qty"></span></th>
+            <th class="col-price" onclick="invSortBy('price')"      >LE/unit <span class="sort-arrow" id="isa-price"></span></th>
+            <th class="col-total" onclick="invSortBy('total')"      >Total <span class="sort-arrow" id="isa-total"></span></th>
+            <th class="col-inv" title="Remove from inventory">📦</th>
+            <th class="col-act"></th>
+          </tr>
+        </thead>
+        <tbody id="inventoryTableBody"></tbody>
+      </table>
+    </div>
+    <div class="tbl-footer" id="invTblFooter"></div>
   </div>
 </div>
 
@@ -652,6 +692,7 @@ const SOURCE_GROUPS = [
 let sb   = null;
 let rows = [];
 let sortCol = null, sortDir = 1;
+let invSortCol = null, invSortDir = 1;
 let editId = null, delId = null;
 
 /* ═══════════════════════════════════════════════════════
@@ -771,6 +812,7 @@ async function loadItems() {
   populateFilters();
   renderItems();
   renderDashboard();
+  renderInventory();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -820,6 +862,7 @@ function setTab(name) {
   document.getElementById('tbtn-' + name).classList.add('active');
   if (name === 'dashboard') renderDashboard();
   if (name === 'items')     renderItems();
+  if (name === 'inventory') renderInventory();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -827,16 +870,18 @@ function setTab(name) {
 ═══════════════════════════════════════════════════════ */
 function populateFilters() {
   const cats = [...new Set(rows.map(r => r.category).filter(Boolean))].sort();
-  const fc = document.getElementById('fCat');
-  fc.innerHTML = '<option value="">All Categories</option>' +
+  const catOpts = '<option value="">All Categories</option>' +
     cats.map(c => `<option value="${e(c)}">${c}</option>`).join('');
+  document.getElementById('fCat').innerHTML = catOpts;
+  document.getElementById('iCat').innerHTML = catOpts;
 
   document.getElementById('catDatalist').innerHTML = cats.map(c => `<option value="${e(c)}">`).join('');
 
-  const fs = document.getElementById('fSource');
-  fs.innerHTML = '<option value="">All Sources</option>' +
+  const srcOpts = '<option value="">All Sources</option>' +
     SOURCE_GROUPS.filter(g => rows.some(r => g.match(r.source || '')))
       .map(g => `<option value="${g.value}">${g.label}</option>`).join('');
+  document.getElementById('fSource').innerHTML = srcOpts;
+  document.getElementById('iSource').innerHTML = srcOpts;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -947,13 +992,14 @@ function renderItems() {
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
       <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
       <td class="col-buy">${buyBtn(r)}</td>
+      <td class="col-inv"><button class="inv-toggle ${r.in_inventory?'on':''}" onclick="toggleInventory(${r.id},${r.in_inventory})" title="${r.in_inventory ? 'In inventory — click to remove' : 'Add to inventory'}">📦</button></td>
       <td class="col-crit">${r.critical?'<span class="crit-badge">⚠</span>':''}</td>
       <td class="col-act"><div class="row-actions">
         <button class="btn-icon" onclick="openEdit(${r.id})" title="Edit">✎</button>
         <button class="btn-icon del" onclick="openDel(${r.id})" title="Delete">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="11"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="12"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
 
   const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   const sc = items.filter(r=>r.bought).reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
@@ -978,6 +1024,79 @@ function sortBy(col) {
 }
 
 /* ═══════════════════════════════════════════════════════
+   INVENTORY TABLE
+═══════════════════════════════════════════════════════ */
+function renderInventory() {
+  const search = (document.getElementById('iSearch')?.value||'').toLowerCase();
+  const fCat   = document.getElementById('iCat')?.value || '';
+  const fSrc   = document.getElementById('iSource')?.value || '';
+
+  let items = rows.filter(r => r.in_inventory);
+  if (search) items = items.filter(r =>
+    (r.description||'').toLowerCase().includes(search) ||
+    (r.ref||'').toLowerCase().includes(search) ||
+    (r.notes||'').toLowerCase().includes(search) ||
+    (r.source||'').toLowerCase().includes(search));
+  if (fCat) items = items.filter(r => r.category === fCat);
+  if (fSrc) { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>g.match(r.source||'')); }
+
+  if (invSortCol) {
+    items.sort((a, b) => {
+      let av, bv;
+      if      (invSortCol==='pos')         { av=a.pos||0;        bv=b.pos||0; }
+      else if (invSortCol==='ref')         { av=a.ref||'';       bv=b.ref||''; }
+      else if (invSortCol==='description') { av=a.description||''; bv=b.description||''; }
+      else if (invSortCol==='source')      { av=a.source||'';    bv=b.source||''; }
+      else if (invSortCol==='qty')         { av=a.qty||0;        bv=b.qty||0; }
+      else if (invSortCol==='price')       { av=a.price||0;      bv=b.price||0; }
+      else if (invSortCol==='total')       { av=(a.qty||0)*(a.price||0); bv=(b.qty||0)*(b.price||0); }
+      if (typeof av==='string') return invSortDir*av.localeCompare(bv);
+      return invSortDir*(av-bv);
+    });
+  }
+
+  document.getElementById('invCountBadge').textContent = `${items.length} in inventory`;
+
+  let n=0;
+  document.getElementById('inventoryTableBody').innerHTML = items.map(r => {
+    n++;
+    return `<tr>
+      <td class="col-num">${n}</td>
+      <td><span class="ref-tag">${e(r.ref||'—')}</span></td>
+      <td class="col-desc">${e(r.description||'')}</td>
+      <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
+      <td class="col-qty">${r.qty||0}</td>
+      <td class="col-price">${(r.price||0).toLocaleString()}</td>
+      <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
+      <td class="col-inv"><button class="inv-toggle on" onclick="toggleInventory(${r.id},${r.in_inventory})" title="Remove from inventory">📦</button></td>
+      <td class="col-act"><div class="row-actions">
+        <button class="btn-icon" onclick="openEdit(${r.id})" title="Edit">✎</button>
+      </div></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="9"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — tick the 📦 button on any item to move it here</p></div></td></tr>`;
+
+  const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
+  document.getElementById('invTblFooter').innerHTML =
+    `<span>${items.length} item${items.length!==1?'s':''}</span>
+     <span>Total value <strong>${tc.toLocaleString()} LE</strong></span>`;
+
+  ['pos','ref','description','source','qty','price','total'].forEach(col => {
+    const el = document.getElementById('isa-'+col);
+    if (el) el.textContent = col===invSortCol ? (invSortDir===1?'↑':'↓') : '';
+  });
+  document.querySelectorAll('#tab-inventory .data-table th').forEach(th => {
+    th.classList.remove('sorted-asc','sorted-desc');
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow && arrow.id==='isa-'+invSortCol) th.classList.add(invSortDir===1?'sorted-asc':'sorted-desc');
+  });
+}
+
+function invSortBy(col) {
+  if (invSortCol===col) invSortDir*=-1; else {invSortCol=col; invSortDir=1;}
+  renderInventory();
+}
+
+/* ═══════════════════════════════════════════════════════
    TOGGLE BOUGHT
 ═══════════════════════════════════════════════════════ */
 async function toggleBought(id, current) {
@@ -989,6 +1108,22 @@ async function toggleBought(id, current) {
   } catch(err) {
     if(r) r.bought = current; // rollback
     renderItems(); renderDashboard();
+    toast('Save failed: '+err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOGGLE INVENTORY
+═══════════════════════════════════════════════════════ */
+async function toggleInventory(id, current) {
+  const r = rows.find(r=>r.id===id); if(r) r.in_inventory = !current;
+  renderItems(); renderInventory();
+  toast(!current ? 'Added to inventory 📦' : 'Removed from inventory');
+  try {
+    await dbUpdate(id, { in_inventory: !current });
+  } catch(err) {
+    if(r) r.in_inventory = current; // rollback
+    renderItems(); renderInventory();
     toast('Save failed: '+err.message, 'red');
   }
 }
