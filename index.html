@@ -441,7 +441,6 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
             <th class="col-chk" title="Mark purchased"></th>
             <th class="col-num"   onclick="sortBy('pos')"        >#    <span class="sort-arrow" id="sa-pos"></span></th>
             <th class="col-desc"  onclick="sortBy('name')"       >Name <span class="sort-arrow" id="sa-name"></span></th>
-            <th class="col-src"   onclick="sortBy('source')"     >Source <span class="sort-arrow" id="sa-source"></span></th>
             <th class="col-qty"   onclick="sortBy('qty')"        >Qty  <span class="sort-arrow" id="sa-qty"></span></th>
             <th class="col-price" onclick="sortBy('price')"      >LE/unit <span class="sort-arrow" id="sa-price"></span></th>
             <th class="col-total" onclick="sortBy('total')"      >Total <span class="sort-arrow" id="sa-total"></span></th>
@@ -480,6 +479,8 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <select id="iCat"    class="filter-sel" onchange="renderInventory()"><option value="">All Categories</option></select>
       <select id="iSource" class="filter-sel" onchange="renderInventory()"><option value="">All Sources</option></select>
       <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" id="invBulkWishBtn" style="display:none" onclick="bulkAddToWishlist()">🛒 Add to Wishlist</button>
+      <button class="btn btn-secondary btn-sm" id="invBulkDelBtn" style="display:none" onclick="bulkDeleteInventory()">🗑 Delete</button>
       <span class="count-badge" id="invCountBadge"></span>
       <button class="btn btn-primary btn-sm" onclick="openAdd('inventory')">+ Add Item</button>
     </div>
@@ -487,9 +488,9 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       <table class="data-table">
         <thead>
           <tr>
+            <th class="col-sel"><input type="checkbox" id="invSelectAllChk" onchange="toggleSelectAllInv(this.checked)" title="Select all"></th>
             <th class="col-num"   onclick="invSortBy('id')"         >#    <span class="sort-arrow" id="isa-id"></span></th>
             <th class="col-desc"  onclick="invSortBy('name')"       >Name <span class="sort-arrow" id="isa-name"></span></th>
-            <th class="col-src"   onclick="invSortBy('source')"     >Source <span class="sort-arrow" id="isa-source"></span></th>
             <th class="col-qtyctrl" onclick="invSortBy('qty')"      >Qty  <span class="sort-arrow" id="isa-qty"></span></th>
             <th class="col-price" onclick="invSortBy('price')"      >LE/unit <span class="sort-arrow" id="isa-price"></span></th>
             <th class="col-total" onclick="invSortBy('total')"      >Total <span class="sort-arrow" id="isa-total"></span></th>
@@ -509,12 +510,15 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
   <div class="page-inner">
     <div class="toolbar">
       <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" id="trashBulkRestoreBtn" style="display:none" onclick="bulkRestore()">↩ Restore</button>
+      <button class="btn btn-danger btn-sm" id="trashBulkPurgeBtn" style="display:none" onclick="bulkPurge()">🗑 Delete Forever</button>
       <span class="count-badge" id="trashCountBadge"></span>
     </div>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
+            <th class="col-sel"><input type="checkbox" id="trashSelectAllChk" onchange="toggleSelectAllTrash(this.checked)" title="Select all"></th>
             <th class="col-num">#</th>
             <th class="col-desc">Name</th>
             <th class="col-src">From</th>
@@ -663,20 +667,21 @@ const _X = { // retired — buy_url / buy_label now live in Supabase
 };
 
 const STORES = [
-  { source: 'circuits-elec.com',  label: '🟢 circuits-elec',    url: 'https://circuits-elec.com' },
-  { source: 'HD Electronics',     label: '🔵 HD Electronics',    url: 'https://hdelectronicseg.com' },
-  { source: 'RAM Electronics',    label: '🔵 RAM e-shop',        url: 'https://www.ram-e-shop.com' },
-  { source: 'uge-one.com',        label: '🟠 UGE Electronics',   url: 'https://uge-one.com' },
-  { source: 'microohm-eg.com',    label: '🔴 microohm-eg',       url: 'https://microohm-eg.com' },
-  { source: 'future-electronics', label: '🟡 Future Electronics', url: '' },
-  { source: 'Attaba Market',      label: '🏪 Attaba Market',     url: '' },
-  { source: 'Hardware store',     label: '🔨 Hardware store',    url: '' },
-  { source: 'Pharmacy',           label: '💊 Pharmacy',          url: '' },
-  { source: 'Supermarket',        label: '🛒 Supermarket',       url: '' },
-  { source: 'Stationery',         label: '📝 Stationery',        url: '' },
-  { source: 'Home store',         label: '🏠 Home store',        url: '' },
-  { source: 'Print shop',         label: '🖨 Print shop',        url: '' },
-  { source: 'Already owned',      label: '✅ Owned',             url: '' },
+  { source: 'circuits-elec.com',  label: '🟢 circuits-elec',     url: 'https://circuits-elec.com',   cls: 'green'  },
+  { source: 'HD Electronics',     label: '🔵 HD Electronics',    url: 'https://hdelectronicseg.com', cls: 'teal'   },
+  { source: 'RAM Electronics',    label: '🔵 RAM e-shop',        url: 'https://www.ram-e-shop.com',  cls: 'teal'   },
+  { source: 'uge-one.com',        label: '🟠 UGE Electronics',   url: 'https://uge-one.com',         cls: 'slate'  },
+  { source: 'microohm-eg.com',    label: '🔴 microohm-eg',       url: 'https://microohm-eg.com',     cls: 'red'    },
+  { source: 'future-electronics', label: '🟡 Future Electronics', url: '',                           cls: 'amber'  },
+  { source: 'Ampere Electronics', label: '🟤 Ampere Electronics', url: '',                           cls: 'navy'   },
+  { source: 'Unknown',            label: '❓ Unknown',           url: '',                            cls: 'grey'   },
+  { source: 'Hardware store',     label: '🔨 Hardware store',    url: '',                            cls: 'slate'  },
+  { source: 'Pharmacy',           label: '💊 Pharmacy',          url: '',                            cls: 'purple' },
+  { source: 'Supermarket',        label: '🛒 Supermarket',       url: '',                            cls: 'teal'   },
+  { source: 'Stationery',         label: '📝 Stationery',        url: '',                            cls: 'slate'  },
+  { source: 'Home store',         label: '🏠 Home store',        url: '',                            cls: 'slate'  },
+  { source: 'Print shop',         label: '🖨 Print shop',        url: '',                            cls: 'navy'   },
+  { source: 'Already owned',      label: '✅ Owned',             url: '',                            cls: 'grey'   },
 ];
 
 const SOURCE_GROUPS = [
@@ -700,6 +705,8 @@ let invSortCol = null, invSortDir = 1;
 let editId = null, editTarget = 'wishlist';
 let delId  = null, delTarget  = 'wishlist';
 let selectedWishlist = new Set();
+let selectedInventory = new Set();
+let selectedTrash = new Set();
 
 /* ═══════════════════════════════════════════════════════
    PIN + INIT
@@ -824,6 +831,8 @@ async function loadItems() {
   invRows = inv.data   || [];
   delRows = trash.data || [];
   for (const id of [...selectedWishlist]) if (!rows.some(r => r.id === id)) selectedWishlist.delete(id);
+  for (const id of [...selectedInventory]) if (!invRows.some(r => r.id === id)) selectedInventory.delete(id);
+  for (const id of [...selectedTrash]) if (!delRows.some(r => r.id === id)) selectedTrash.delete(id);
   populateFilters();
   renderItems();
   renderDashboard();
@@ -910,7 +919,6 @@ async function archiveDeleted(row, sourceTable) {
     notes:     row.notes,
     critical:  row.critical ?? null,
     buy_url:   row.buy_url ?? null,
-    buy_label: row.buy_label ?? null,
   });
   if (error) throw error;
 }
@@ -922,7 +930,7 @@ async function restoreItem(id) {
   try {
     const base = {
       name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes,
-      buy_url: r.buy_url || '', buy_label: r.buy_label || '',
+      buy_url: r.buy_url || '',
     };
     if (dest === 'inventory') await invInsert(base);
     else await dbInsert({ ...base, critical: r.critical || false });
@@ -969,7 +977,7 @@ async function markPurchased(id) {
       await invInsert({
         name: r.name, category: r.category, source: r.source,
         qty: r.qty, price: r.price, notes: r.notes,
-        buy_url: r.buy_url||'', buy_label: r.buy_label||'',
+        buy_url: r.buy_url||'',
       });
     }
     await dbDeleteRaw(r.id);
@@ -1023,7 +1031,7 @@ async function bulkMoveToInventory() {
         const created = await invInsert({
           name: r.name, category: r.category, source: r.source,
           qty: r.qty, price: r.price, notes: r.notes,
-          buy_url: r.buy_url||'', buy_label: r.buy_label||'',
+          buy_url: r.buy_url||'',
         });
         working.push({ id: created.id, name: created.name, qty: created.qty });
       }
@@ -1035,6 +1043,165 @@ async function bulkMoveToInventory() {
     await loadItems();
   } catch(err) {
     toast('Bulk move failed: '+err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   INVENTORY BULK ACTIONS
+═══════════════════════════════════════════════════════ */
+function toggleSelectRowInv(id, checked) {
+  if (checked) selectedInventory.add(id); else selectedInventory.delete(id);
+  updateInvBulkBar();
+}
+
+function toggleSelectAllInv(checked) {
+  selectedInventory = checked ? new Set(invRows.map(r => r.id)) : new Set();
+  renderInventory();
+}
+
+function updateInvBulkBar() {
+  const n = selectedInventory.size;
+  const wishBtn = document.getElementById('invBulkWishBtn');
+  const delBtn  = document.getElementById('invBulkDelBtn');
+  if (wishBtn) {
+    wishBtn.style.display = n ? 'inline-flex' : 'none';
+    wishBtn.textContent = `🛒 Add ${n} to Wishlist`;
+  }
+  if (delBtn) {
+    delBtn.style.display = n ? 'inline-flex' : 'none';
+    delBtn.textContent = `🗑 Delete ${n}`;
+  }
+  const all = document.getElementById('invSelectAllChk');
+  if (all) all.checked = invRows.length > 0 && n === invRows.length;
+}
+
+function findWishlistMatch(name) {
+  const key = (name||'').trim().toLowerCase();
+  if (!key) return null;
+  return rows.find(x => (x.name||'').trim().toLowerCase() === key) || null;
+}
+
+async function bulkAddToWishlist() {
+  const ids = [...selectedInventory];
+  if (!ids.length) return;
+  if (!confirm(`Add ${ids.length} item(s) to your wishlist?`)) return;
+
+  try {
+    let added = 0;
+    for (const id of ids) {
+      const r = invRows.find(x => x.id === id); if (!r) continue;
+      const match = findWishlistMatch(r.name);
+      if (match) {
+        await dbUpdate(match.id, { qty: (match.qty||0) + 1 });
+      } else {
+        await dbInsert({
+          name: r.name, category: r.category, source: r.source,
+          qty: 1, price: r.price, notes: r.notes,
+          buy_url: r.buy_url||'', critical: false,
+        });
+      }
+      added++;
+    }
+    selectedInventory.clear();
+    toast(`Added ${added} item${added!==1?'s':''} to wishlist 🛒`);
+    await loadItems();
+  } catch(err) {
+    toast('Bulk add failed: '+err.message, 'red');
+  }
+}
+
+async function bulkDeleteInventory() {
+  const ids = [...selectedInventory];
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} item(s) from your inventory? They'll be moved to Trash.`)) return;
+
+  try {
+    for (const id of ids) await invDelete(id);
+    selectedInventory.clear();
+    toast(`Deleted ${ids.length} item${ids.length!==1?'s':''} 🗑`, 'red');
+    await loadItems();
+  } catch(err) {
+    toast('Bulk delete failed: '+err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   TRASH BULK ACTIONS
+═══════════════════════════════════════════════════════ */
+function toggleSelectRowTrash(id, checked) {
+  if (checked) selectedTrash.add(id); else selectedTrash.delete(id);
+  updateTrashBulkBar();
+}
+
+function toggleSelectAllTrash(checked) {
+  selectedTrash = checked ? new Set(delRows.map(r => r.id)) : new Set();
+  renderTrash();
+}
+
+function updateTrashBulkBar() {
+  const n = selectedTrash.size;
+  const restoreBtn = document.getElementById('trashBulkRestoreBtn');
+  const purgeBtn   = document.getElementById('trashBulkPurgeBtn');
+  if (restoreBtn) {
+    restoreBtn.style.display = n ? 'inline-flex' : 'none';
+    restoreBtn.textContent = `↩ Restore ${n}`;
+  }
+  if (purgeBtn) {
+    purgeBtn.style.display = n ? 'inline-flex' : 'none';
+    purgeBtn.textContent = `🗑 Delete ${n} Forever`;
+  }
+  const all = document.getElementById('trashSelectAllChk');
+  if (all) all.checked = delRows.length > 0 && n === delRows.length;
+}
+
+async function bulkRestore() {
+  const ids = [...selectedTrash];
+  if (!ids.length) return;
+  if (!confirm(`Restore ${ids.length} item(s)?`)) return;
+
+  try {
+    let restored = 0, skipped = 0;
+    for (const id of ids) {
+      const r = delRows.find(x => x.id === id); if (!r) continue;
+      const dest = r.source_table === 'inventory' ? 'inventory' : 'wishlist';
+      const base = {
+        name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes,
+        buy_url: r.buy_url || '',
+      };
+      try {
+        if (dest === 'inventory') await invInsert(base);
+        else await dbInsert({ ...base, critical: r.critical || false });
+      } catch(err) {
+        if (err.code === '23505') { skipped++; continue; }
+        throw err;
+      }
+      const { error } = await sb.from('deleted_items').delete().eq('id', id);
+      if (error) throw error;
+      restored++;
+    }
+    selectedTrash.clear();
+    let msg = `Restored ${restored} item${restored!==1?'s':''} ↩`;
+    if (skipped) msg += `, skipped ${skipped} duplicate${skipped!==1?'s':''}`;
+    toast(msg, skipped ? 'red' : undefined);
+    await loadItems();
+  } catch(err) {
+    toast('Bulk restore failed: '+err.message, 'red');
+  }
+}
+
+async function bulkPurge() {
+  const ids = [...selectedTrash];
+  if (!ids.length) return;
+  if (!confirm(`Permanently delete ${ids.length} item(s)? This cannot be undone.`)) return;
+
+  try {
+    const { error } = await sb.from('deleted_items').delete().in('id', ids);
+    if (error) throw error;
+    selectedTrash.clear();
+    toast(`Permanently deleted ${ids.length} item${ids.length!==1?'s':''}`, 'red');
+    await loadItems();
+  } catch(err) {
+    toast('Bulk delete failed: '+err.message, 'red');
   }
 }
 
@@ -1191,7 +1358,6 @@ function renderItems() {
       <td class="col-chk"><button class="cb-buy" onclick="markPurchased(${r.id})" title="Mark purchased — moves to inventory">🛒</button></td>
       <td class="col-num">${n}</td>
       <td class="col-desc">${e(r.name||'')}</td>
-      <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
       <td class="col-qty">${r.qty||0}</td>
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
       <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
@@ -1202,7 +1368,7 @@ function renderItems() {
         <button class="btn-icon del" onclick="openDel(${r.id})" title="Delete">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="11"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="10"><div class="inline-empty"><div class="icon">🔍</div><p>No items match your filters</p></div></td></tr>`;
 
   const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   const sc = invRows.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
@@ -1265,9 +1431,9 @@ function renderInventory() {
     n++;
     const qty = r.qty||0;
     return `<tr>
+      <td class="col-sel"><input type="checkbox" ${selectedInventory.has(r.id)?'checked':''} onchange="toggleSelectRowInv(${r.id}, this.checked)"></td>
       <td class="col-num">${n}</td>
       <td class="col-desc">${e(r.name||'')}</td>
-      <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
       <td class="col-qtyctrl">
         <div class="qty-ctrl">
           <button class="qty-btn" onclick="invAdjustQty(${r.id},-1)" ${qty<=0?'disabled':''} title="Decrease">−</button>
@@ -1291,6 +1457,8 @@ function renderInventory() {
   document.getElementById('invTblFooter').innerHTML =
     `<span>${items.length} item${items.length!==1?'s':''}</span>
      <span>Total value <strong>${tc.toLocaleString()} LE</strong></span>`;
+
+  updateInvBulkBar();
 
   ['id','name','source','qty','price','total'].forEach(col => {
     const el = document.getElementById('isa-'+col);
@@ -1321,6 +1489,7 @@ function renderTrash() {
     const when = r.deleted_at ? new Date(r.deleted_at).toLocaleString() : '';
     const from = r.source_table === 'inventory' ? '📦 Inventory' : '🛒 Wishlist';
     return `<tr>
+      <td class="col-sel"><input type="checkbox" ${selectedTrash.has(r.id)?'checked':''} onchange="toggleSelectRowTrash(${r.id}, this.checked)"></td>
       <td class="col-num">${n}</td>
       <td class="col-desc">${e(r.name||'')}</td>
       <td class="col-src"><span class="source-pill">${from}</span></td>
@@ -1333,13 +1502,15 @@ function renderTrash() {
         <button class="btn-icon del" onclick="purgeItem(${r.id})" title="Delete forever">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="8"><div class="inline-empty"><div class="icon">🗑</div><p>Trash is empty — deleted items land here so you can restore them later</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="9"><div class="inline-empty"><div class="icon">🗑</div><p>Trash is empty — deleted items land here so you can restore them later</p></div></td></tr>`;
 
   document.getElementById('trashCountBadge').textContent = `${delRows.length} deleted item${delRows.length!==1?'s':''}`;
   const tc = delRows.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   document.getElementById('trashTblFooter').innerHTML =
     `<span>${delRows.length} item${delRows.length!==1?'s':''}</span>
      <span>Value <strong>${tc.toLocaleString()} LE</strong></span>`;
+
+  updateTrashBulkBar();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1349,11 +1520,6 @@ function populateStoreDropdowns(selectedSource) {
   const srcSel = document.getElementById('fSourceModal');
   srcSel.innerHTML = STORES.map(s => `<option value="${e(s.source)}">${e(s.source)}</option>`).join('');
   if (selectedSource) srcSel.value = selectedSource;
-}
-
-function buyLabelForSource(source) {
-  const store = STORES.find(s => s.source === source);
-  return store ? store.label : '';
 }
 
 function checkInventoryMatch() {
@@ -1424,7 +1590,6 @@ async function saveItem(ev) {
     price:       parseFloat(document.getElementById('fPrice').value)||0,
     notes:       document.getElementById('fNotes').value.trim(),
     buy_url:     document.getElementById('fBuyUrl').value.trim(),
-    buy_label:   buyLabelForSource(source),
   };
   const payload = isInv ? common : {
     ...common,
@@ -1442,7 +1607,8 @@ async function saveItem(ev) {
     closeEdit();
     await loadItems();
   } catch(err) {
-    toast('Save failed: '+err.message, 'red');
+    if (err.code === '23505') toast(`An item named "${payload.name}" already exists`, 'red');
+    else toast('Save failed: '+err.message, 'red');
   } finally {
     btn.disabled = false;
     btn.textContent = editId ? 'Save Changes' : 'Add Item';
@@ -1477,29 +1643,17 @@ function closeDel()    { document.getElementById('delModal').classList.remove('o
 function closeDelIf(e) { if(e.target===document.getElementById('delModal')) closeDel(); }
 
 /* ═══════════════════════════════════════════════════════
-   BUY BUTTON  (uses buy_url / buy_label from Supabase)
+   BUY BUTTON  (label always derived from source; buy_url
+   is the per-item product link from Supabase)
 ═══════════════════════════════════════════════════════ */
 function buyBtn(row) {
-  const label = row.buy_label || '';
-  const url   = row.buy_url   || '';
+  const store = STORES.find(s => s.source === (row.source||''));
+  const label = store ? store.label : '';
+  const url   = row.buy_url || '';
   if (!label && !url) return '';
-  const cls = buyBtnClass(label, url);
+  const cls = store ? store.cls : 'slate';
   if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}">${e(label || url)}</a>`;
   return `<span class="buy-btn ${cls}">${e(label)}</span>`;
-}
-
-function buyBtnClass(label, url) {
-  const s = (label + ' ' + url).toLowerCase();
-  if (/circuits-elec/i.test(s))             return 'green';
-  if (/ram-e-shop|ram electronics/i.test(s)) return 'teal';
-  if (/uge-one|uge electronics/i.test(s))    return 'slate';
-  if (/microohm/i.test(s))                   return 'red';
-  if (/future.?electron/i.test(s))           return 'amber';
-  if (/hdelectronics|hd electronics/i.test(s)) return 'teal';
-  if (/pharmacy/i.test(s))                   return 'purple';
-  if (/print shop/i.test(s))                 return 'navy';
-  if (/owned/i.test(s))                      return 'grey';
-  return 'slate';
 }
 
 /* ═══════════════════════════════════════════════════════
