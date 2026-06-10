@@ -233,13 +233,28 @@ body{
 .col-num{width:38px;text-align:right}
 .col-src{width:110px}
 .col-qty{width:46px;text-align:right}
+.col-qtyctrl{width:104px;text-align:center}
 .col-price{width:70px;text-align:right;font-variant-numeric:tabular-nums}
 .col-total{width:72px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .col-buy{width:126px}
 .col-crit{width:50px;text-align:center}
 .col-act{width:72px;text-align:right}
+.col-act3{width:96px;text-align:right}
 .col-desc{min-width:200px}
 td.col-num,td.col-qty,td.col-price,td.col-total{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── INVENTORY QTY CONTROLS ─────────────────────────────── */
+.qty-ctrl{display:flex;align-items:center;justify-content:center;gap:5px}
+.qty-btn{
+  width:21px;height:21px;border:1px solid var(--border2);border-radius:5px;
+  background:var(--surface2);color:var(--text2);cursor:pointer;font-size:13px;
+  line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0;
+  font-family:inherit;transition:all .12s;
+}
+.qty-btn:hover:not(:disabled){background:var(--surface3);color:var(--text);border-color:var(--blue)}
+.qty-btn:disabled{opacity:.35;cursor:not-allowed}
+.qty-val{min-width:20px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+.oos-badge{font-size:9px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.4px;text-align:center;margin-top:3px}
 
 /* ── MARK PURCHASED BUTTON ──────────────────────────────── */
 .cb-buy{
@@ -475,10 +490,11 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
             <th class="col-num"   onclick="invSortBy('id')"         >#    <span class="sort-arrow" id="isa-id"></span></th>
             <th class="col-desc"  onclick="invSortBy('name')"       >Name <span class="sort-arrow" id="isa-name"></span></th>
             <th class="col-src"   onclick="invSortBy('source')"     >Source <span class="sort-arrow" id="isa-source"></span></th>
-            <th class="col-qty"   onclick="invSortBy('qty')"        >Qty  <span class="sort-arrow" id="isa-qty"></span></th>
+            <th class="col-qtyctrl" onclick="invSortBy('qty')"      >Qty  <span class="sort-arrow" id="isa-qty"></span></th>
             <th class="col-price" onclick="invSortBy('price')"      >LE/unit <span class="sort-arrow" id="isa-price"></span></th>
             <th class="col-total" onclick="invSortBy('total')"      >Total <span class="sort-arrow" id="isa-total"></span></th>
-            <th class="col-act"></th>
+            <th class="col-buy">Buy</th>
+            <th class="col-act3"></th>
           </tr>
         </thead>
         <tbody id="inventoryTableBody"></tbody>
@@ -536,7 +552,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
         </div>
         <div class="form-group">
           <label class="form-label">Source / Store</label>
-          <select id="fSourceModal" class="form-select" onchange="syncBuyLabel()"></select>
+          <select id="fSourceModal" class="form-select"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Qty *</label>
@@ -550,13 +566,9 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
           <label class="form-label">Notes</label>
           <textarea id="fNotes" class="form-textarea" placeholder="Additional notes…"></textarea>
         </div>
-        <div class="form-group span2 wishlist-only">
+        <div class="form-group span2">
           <label class="form-label">Buy Link URL</label>
           <input type="url" id="fBuyUrl" class="form-input" placeholder="https://circuits-elec.com/products/...">
-        </div>
-        <div class="form-group wishlist-only">
-          <label class="form-label">Buy Button Label</label>
-          <select id="fBuyLabel" class="form-select" onchange="syncSource()"></select>
         </div>
         <div class="form-group wishlist-only" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
           <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
@@ -832,11 +844,15 @@ async function dbUpdate(id, payload) {
   if (error) throw error;
 }
 
+async function dbDeleteRaw(id) {
+  const { error } = await sb.from('bom_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
 async function dbDelete(id) {
   const r = rows.find(r => r.id === id);
   if (r) await archiveDeleted(r, 'wishlist');
-  const { error } = await sb.from('bom_items').delete().eq('id', id);
-  if (error) throw error;
+  await dbDeleteRaw(id);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -853,11 +869,27 @@ async function invUpdate(id, payload) {
   if (error) throw error;
 }
 
+async function invAdjustQty(id, delta) {
+  const r = invRows.find(r => r.id === id); if (!r) return;
+  const newQty = Math.max(0, (r.qty||0) + delta);
+  if (newQty === r.qty) return;
+  try {
+    await invUpdate(id, { qty: newQty });
+    await loadItems();
+  } catch(err) {
+    toast('Update failed: '+err.message, 'red');
+  }
+}
+
+async function invDeleteRaw(id) {
+  const { error } = await sb.from('inventory').delete().eq('id', id);
+  if (error) throw error;
+}
+
 async function invDelete(id) {
   const r = invRows.find(r => r.id === id);
   if (r) await archiveDeleted(r, 'inventory');
-  const { error } = await sb.from('inventory').delete().eq('id', id);
-  if (error) throw error;
+  await invDeleteRaw(id);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -887,9 +919,12 @@ async function restoreItem(id) {
   const dest = r.source_table === 'inventory' ? 'inventory' : 'wishlist';
   if (!confirm(`Restore "${r.name}" to your ${dest === 'inventory' ? 'inventory' : 'wishlist'}?`)) return;
   try {
-    const base = { name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes };
+    const base = {
+      name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes,
+      buy_url: r.buy_url || '', buy_label: r.buy_label || '',
+    };
     if (dest === 'inventory') await invInsert(base);
-    else await dbInsert({ ...base, critical: r.critical || false, buy_url: r.buy_url || '', buy_label: r.buy_label || '' });
+    else await dbInsert({ ...base, critical: r.critical || false });
     const { error } = await sb.from('deleted_items').delete().eq('id', id);
     if (error) throw error;
     toast('Item restored ↩');
@@ -931,11 +966,12 @@ async function markPurchased(id) {
       await invUpdate(match.id, { qty: (match.qty||0) + (r.qty||0) });
     } else {
       await invInsert({
-        name: r.name, category: r.category,
-        source: r.source, qty: r.qty, price: r.price, notes: r.notes,
+        name: r.name, category: r.category, source: r.source,
+        qty: r.qty, price: r.price, notes: r.notes,
+        buy_url: r.buy_url||'', buy_label: r.buy_label||'',
       });
     }
-    await dbDelete(r.id);
+    await dbDeleteRaw(r.id);
     toast('Moved to inventory 📦');
     await loadItems();
   } catch(err) {
@@ -984,12 +1020,13 @@ async function bulkMoveToInventory() {
         match.qty = newQty;
       } else {
         const created = await invInsert({
-          name: r.name, category: r.category,
-          source: r.source, qty: r.qty, price: r.price, notes: r.notes,
+          name: r.name, category: r.category, source: r.source,
+          qty: r.qty, price: r.price, notes: r.notes,
+          buy_url: r.buy_url||'', buy_label: r.buy_label||'',
         });
         working.push({ id: created.id, name: created.name, qty: created.qty });
       }
-      await dbDelete(r.id);
+      await dbDeleteRaw(r.id);
       moved++;
     }
     selectedWishlist.clear();
@@ -1223,19 +1260,29 @@ function renderInventory() {
   let n=0;
   document.getElementById('inventoryTableBody').innerHTML = items.map(r => {
     n++;
+    const qty = r.qty||0;
     return `<tr>
       <td class="col-num">${n}</td>
       <td class="col-desc">${e(r.name||'')}</td>
       <td class="col-src"><span class="source-pill">${e(r.source||'')}</span></td>
-      <td class="col-qty">${r.qty||0}</td>
+      <td class="col-qtyctrl">
+        <div class="qty-ctrl">
+          <button class="qty-btn" onclick="invAdjustQty(${r.id},-1)" ${qty<=0?'disabled':''} title="Decrease">−</button>
+          <span class="qty-val">${qty}</span>
+          <button class="qty-btn" onclick="invAdjustQty(${r.id},1)" title="Increase">+</button>
+        </div>
+        ${qty===0 ? '<div class="oos-badge">Out of stock</div>' : ''}
+      </td>
       <td class="col-price">${(r.price||0).toLocaleString()}</td>
-      <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
-      <td class="col-act"><div class="row-actions">
+      <td class="col-total">${(qty*(r.price||0)).toLocaleString()}</td>
+      <td class="col-buy">${buyBtn(r)}</td>
+      <td class="col-act3"><div class="row-actions">
+        <button class="btn-icon" onclick="addToWishlist(${r.id})" title="Add to wishlist">🛒</button>
         <button class="btn-icon" onclick="openEdit(${r.id},'inventory')" title="Edit">✎</button>
         <button class="btn-icon del" onclick="openDel(${r.id},'inventory')" title="Delete">🗑</button>
       </div></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="7"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — mark a wishlist item as purchased to move it here, or add one directly</p></div></td></tr>`;
+  }).join('') || `<tr><td colspan="8"><div class="inline-empty"><div class="icon">📦</div><p>Nothing in your inventory yet — mark a wishlist item as purchased to move it here, or add one directly</p></div></td></tr>`;
 
   const tc = items.reduce((s,r) => s+(r.qty||0)*(r.price||0), 0);
   document.getElementById('invTblFooter').innerHTML =
@@ -1295,31 +1342,15 @@ function renderTrash() {
 /* ═══════════════════════════════════════════════════════
    CRUD — ADD / EDIT (wishlist)
 ═══════════════════════════════════════════════════════ */
-function populateStoreDropdowns(selectedSource, selectedLabel) {
-  const srcSel   = document.getElementById('fSourceModal');
-  const labelSel = document.getElementById('fBuyLabel');
-  const opts = STORES.map(s =>
-    `<option value="${e(s.source)}" data-label="${e(s.label)}">${e(s.source)}</option>`
-  ).join('');
-  const labelOpts = ['', ...STORES.map(s => s.label)].map(l =>
-    `<option value="${e(l)}">${l || '(none)'}</option>`
-  ).join('');
-  srcSel.innerHTML   = opts;
-  labelSel.innerHTML = labelOpts;
-  if (selectedSource) srcSel.value   = selectedSource;
-  if (selectedLabel)  labelSel.value = selectedLabel;
+function populateStoreDropdowns(selectedSource) {
+  const srcSel = document.getElementById('fSourceModal');
+  srcSel.innerHTML = STORES.map(s => `<option value="${e(s.source)}">${e(s.source)}</option>`).join('');
+  if (selectedSource) srcSel.value = selectedSource;
 }
 
-function syncBuyLabel() {
-  const src   = document.getElementById('fSourceModal').value;
-  const store = STORES.find(s => s.source === src);
-  if (store) document.getElementById('fBuyLabel').value = store.label;
-}
-
-function syncSource() {
-  const label = document.getElementById('fBuyLabel').value;
-  const store = STORES.find(s => s.label === label);
-  if (store) document.getElementById('fSourceModal').value = store.source;
+function buyLabelForSource(source) {
+  const store = STORES.find(s => s.source === source);
+  return store ? store.label : '';
 }
 
 function checkInventoryMatch() {
@@ -1352,15 +1383,27 @@ function openEdit(id, target = 'wishlist') {
   document.getElementById('saveBtn').textContent      = 'Save Changes';
   document.getElementById('fName').value              = r.name||'';
   document.getElementById('fCatInput').value          = r.category||'';
-  populateStoreDropdowns(r.source||'', r.buy_label||'');
+  populateStoreDropdowns(r.source||'');
   document.getElementById('fQty').value               = r.qty||1;
   document.getElementById('fPrice').value             = r.price||0;
   document.getElementById('fNotes').value             = r.notes||'';
   document.getElementById('fBuyUrl').value            = r.buy_url||'';
-  document.getElementById('fBuyLabel').value          = r.buy_label||'';
   document.getElementById('fCritical').checked        = r.critical||false;
   document.getElementById('fNameHint').textContent    = '';
   document.getElementById('editModal').classList.add('open');
+}
+
+function addToWishlist(id) {
+  const r = invRows.find(r=>r.id===id); if(!r) return;
+  openAdd('wishlist');
+  document.getElementById('fName').value     = r.name||'';
+  document.getElementById('fCatInput').value = r.category||'';
+  populateStoreDropdowns(r.source||'');
+  document.getElementById('fQty').value      = 1;
+  document.getElementById('fPrice').value    = r.price||0;
+  document.getElementById('fNotes').value    = r.notes||'';
+  document.getElementById('fBuyUrl').value   = r.buy_url||'';
+  checkInventoryMatch();
 }
 
 async function saveItem(ev) {
@@ -1369,22 +1412,19 @@ async function saveItem(ev) {
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   const isInv = editTarget === 'inventory';
 
-  const payload = isInv ? {
+  const source = document.getElementById('fSourceModal').value;
+  const common = {
     name:        document.getElementById('fName').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
-    source:      document.getElementById('fSourceModal').value,
-    qty:         parseInt(document.getElementById('fQty').value)||1,
-    price:       parseFloat(document.getElementById('fPrice').value)||0,
-    notes:       document.getElementById('fNotes').value.trim(),
-  } : {
-    name:        document.getElementById('fName').value.trim(),
-    category:    document.getElementById('fCatInput').value.trim(),
-    source:      document.getElementById('fSourceModal').value,
+    source:      source,
     qty:         parseInt(document.getElementById('fQty').value)||1,
     price:       parseFloat(document.getElementById('fPrice').value)||0,
     notes:       document.getElementById('fNotes').value.trim(),
     buy_url:     document.getElementById('fBuyUrl').value.trim(),
-    buy_label:   document.getElementById('fBuyLabel').value.trim(),
+    buy_label:   buyLabelForSource(source),
+  };
+  const payload = isInv ? common : {
+    ...common,
     critical:    document.getElementById('fCritical').checked,
   };
 
