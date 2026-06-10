@@ -18,7 +18,9 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY') ?? '';
+// Strip any stray non-ASCII/control characters (e.g. BOM, smart quotes,
+// trailing newlines from copy-paste) that would break HTTP header encoding.
+const GROQ_API_KEY = (Deno.env.get('GROQ_API_KEY') ?? '').replace(/[^\x20-\x7E]/g, '').trim();
 const GROQ_MODEL = Deno.env.get('GROQ_MODEL') || 'llama-3.3-70b-versatile';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const CONFIDENCE_THRESHOLD = 0.6;
