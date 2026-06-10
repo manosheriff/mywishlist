@@ -3,12 +3,12 @@
 // POST { id: number, table: 'bom_items' | 'inventory' }
 //
 // For the given row, searches each of the 7 online stores for the item's
-// name, then makes ONE combined Gemini call to verify which (if any) search
-// result from each store is the same product. Stores with no confident match
-// (plus Amazon, which has no direct search adapter) are then looked up via a
-// single Gemini call using Google Search grounding. On a confident, in-stock
-// match, upserts {source, buy_url, price, image, description} into the row's
-// `sources` jsonb array.
+// name, then makes ONE combined Groq (Llama) call to verify which (if any)
+// search result from each store is the same product. Stores with no
+// confident match (plus Amazon, which has no direct search adapter) are then
+// looked up via DuckDuckGo, with a second Groq call to verify those results.
+// On a confident, in-stock match, upserts {source, buy_url, price, image,
+// description} into the row's `sources` jsonb array.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -18,14 +18,13 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY') ?? '';
+const GROQ_MODEL = Deno.env.get('GROQ_MODEL') || 'llama-3.3-70b-versatile';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const CONFIDENCE_THRESHOLD = 0.6;
 const CANDIDATE_LIMIT = 5;
 const SEARCH_TIMEOUT_MS = 10000;
-const GEMINI_TIMEOUT_MS = 25000;
-const GEMINI_GROUNDING_TIMEOUT_MS = 30000;
+const GROQ_TIMEOUT_MS = 25000;
 
 interface Candidate {
   title: string;
@@ -43,7 +42,7 @@ async function fetchWithTimeout(url: string, opts: RequestInit = {}, timeoutMs =
     return await fetch(url, {
       ...opts,
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BOMPortalBot/1.0)', ...(opts.headers || {}) },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', ...(opts.headers || {}) },
     });
   } finally {
     clearTimeout(timer);
@@ -218,7 +217,7 @@ const STORE_ADAPTERS: Record<string, (q: string) => Promise<Candidate[]>> = {
   'uge-one.com':        wooAdapter('https://uge-one.com'),
 };
 
-// store key -> domain/label, used for the Google/Amazon fallback prompt
+// store key -> domain/label, used for the DuckDuckGo/Amazon fallback search
 const STORE_INFO: Record<string, { domain: string; label: string }> = {
   'circuits-elec.com':  { domain: 'circuits-elec.com',         label: 'Circuits-Elec' },
   'future-electronics': { domain: 'store.fut-electronics.com', label: 'Future Electronics' },
@@ -230,7 +229,35 @@ const STORE_INFO: Record<string, { domain: string; label: string }> = {
   'Amazon':             { domain: 'amazon.eg',                 label: 'Amazon Egypt' },
 };
 
-// ── Gemini verification: ONE call covering every store's candidates ────────
+// ── Groq (Llama) helper ──────────────────────────────────────────────────
+async function callGroqJson(prompt: string): Promise<any> {
+  const res = await fetchWithTimeout(
+    GROQ_URL,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0,
+      }),
+    },
+    GROQ_TIMEOUT_MS,
+  );
+  if (!res.ok) throw new Error(`Groq API error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  let text = data?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Groq returned no content');
+  text = text.trim();
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) text = fenceMatch[1].trim();
+  return JSON.parse(text);
+}
+
+// ── Verification: ONE Groq call covering every store's candidates ──────────
+// Reused both for the direct-store candidates and (separately) for the
+// DuckDuckGo fallback candidates.
 async function verifyAllMatches(
   itemName: string,
   context: string,
@@ -253,40 +280,15 @@ For each store below, its numbered search results are listed:
 
 ${sections}
 
-For EACH store listed above, pick the result that is the SAME product (same component, value and type), not just similar or related. If none of a store's results are clearly the same product, set matchIndex to null and confidence to 0 for that store. "description" should be a concise (max ~20 words) English description of the matched product (or empty string if no match). Respond with a JSON array containing exactly one entry per store listed, each with fields: store (the exact store name as given above), matchIndex, confidence, description.`;
+For EACH store listed above, pick the result that is the SAME product (same component, value and type), not just similar or related. If none of a store's results are clearly the same product, set matchIndex to null and confidence to 0 for that store. "description" should be a concise (max ~20 words) English description of the matched product (or empty string if no match).
 
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: 'ARRAY',
-        items: {
-          type: 'OBJECT',
-          properties: {
-            store: { type: 'STRING' },
-            matchIndex: { type: 'INTEGER', nullable: true },
-            confidence: { type: 'NUMBER' },
-            description: { type: 'STRING' },
-          },
-          required: ['store', 'matchIndex', 'confidence', 'description'],
-        },
-      },
-    },
-  };
+Respond with ONLY a JSON object of the form {"results": [{"store": "<store name exactly as given above>", "matchIndex": <integer or null>, "confidence": <number 0-1>, "description": "<string>"}, ...]}, with exactly one entry per store listed above. Do not include any other text.`;
 
-  const res = await fetchWithTimeout(
-    GEMINI_URL,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-    GEMINI_TIMEOUT_MS,
-  );
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini returned no content');
-  const parsed = JSON.parse(text);
+  const parsed = await callGroqJson(prompt);
+  const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.results) ? parsed.results : [];
   const out: Record<string, { matchIndex: number | null; confidence: number; description: string }> = {};
-  for (const v of parsed) {
+  for (const v of list) {
+    if (!v || typeof v !== 'object' || !v.store) continue;
     out[v.store] = {
       matchIndex: v.matchIndex === null || v.matchIndex === undefined ? null : Number(v.matchIndex),
       confidence: Number(v.confidence) || 0,
@@ -296,65 +298,134 @@ For EACH store listed above, pick the result that is the SAME product (same comp
   return out;
 }
 
-// ── Google/Amazon fallback via Gemini Google Search grounding ──────────────
+// ── DuckDuckGo search (used for the fallback step) ──────────────────────────
+async function ddgSearch(query: string): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  const res = await fetchWithTimeout(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+  if (!res.ok) return [];
+  const html = await res.text();
+  const titles = [...html.matchAll(/<a rel="nofollow" class="result__a" href="([^"]+)">([\s\S]*?)<\/a>/g)];
+  const snippets = [...html.matchAll(/<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)];
+  const out: Array<{ title: string; url: string; snippet: string }> = [];
+  for (let i = 0; i < titles.length && out.length < CANDIDATE_LIMIT; i++) {
+    let url = titles[i][1];
+    try {
+      const u = new URL(url.startsWith('//') ? `https:${url}` : url);
+      const real = u.searchParams.get('uddg');
+      if (real) url = real;
+    } catch { /* keep raw url */ }
+    out.push({ title: stripHtml(titles[i][2]), url, snippet: stripHtml(snippets[i]?.[1] || '') });
+  }
+  return out;
+}
+
+function hostMatches(url: string, domain: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    const d = domain.replace(/^www\./, '');
+    return host === d || host.endsWith(`.${d}`);
+  } catch {
+    return false;
+  }
+}
+
+function extractMeta(html: string, prop: string): string {
+  const escaped = prop.replace(/[:.]/g, '\\$&');
+  let m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]*content=["']([^"']*)["']`, 'i'));
+  if (m) return m[1];
+  m = html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${escaped}["']`, 'i'));
+  return m ? m[1] : '';
+}
+
+// Best-effort extraction of image/price/availability from a product page,
+// via Open Graph tags and JSON-LD Product/Offer markup.
+async function fetchPageMeta(url: string): Promise<{ image: string; price: number | null; inStock: boolean }> {
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return { image: '', price: null, inStock: true };
+    const html = await res.text();
+    const image = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image');
+
+    let price: number | null = null;
+    let availability = '';
+    for (const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+      try {
+        const json = JSON.parse(m[1].trim());
+        for (const item of Array.isArray(json) ? json : [json]) {
+          const offers = item?.offers ? (Array.isArray(item.offers) ? item.offers[0] : item.offers) : null;
+          if (offers?.price != null && price === null) price = parseFloat(String(offers.price));
+          if (offers?.availability) availability = String(offers.availability);
+        }
+      } catch { /* skip invalid JSON-LD block */ }
+      if (price !== null && availability) break;
+    }
+    if (price === null) {
+      const metaPrice = extractMeta(html, 'product:price:amount') || extractMeta(html, 'og:price:amount');
+      if (metaPrice) price = parsePrice(metaPrice);
+    }
+    const inStock = !/out\s*of\s*stock|soldout|sold[\s-]?out/i.test(availability);
+    return { image, price, inStock };
+  } catch {
+    return { image: '', price: null, inStock: true };
+  }
+}
+
+// ── Fallback search via DuckDuckGo, verified by Groq ────────────────────────
 // Used for stores with no confident direct match, plus Amazon (which has no
-// direct search adapter). Grounding is incompatible with responseSchema, so
-// the response is plain text and JSON is extracted manually.
-async function searchGoogleFallback(
+// direct search adapter).
+async function searchFallback(
   itemName: string,
   context: string,
   targetStores: string[],
 ): Promise<Array<{ source: string; buy_url: string; price: number | null; image: string; description: string }>> {
   if (!targetStores.length) return [];
 
-  const storeList = targetStores
-    .map((s) => `- ${STORE_INFO[s]?.label || s} (${STORE_INFO[s]?.domain || s})`)
-    .join('\n');
-  const validSources = targetStores.join(', ');
-
-  const prompt = `A user needs to buy a part called "${itemName}"${context ? ` (category/context: ${context})` : ''}. Search Google (including Google Shopping) to find where to buy this, and check specifically whether any of these online stores sell it:
-${storeList}
-
-For each store with a confident matching product that appears to be in stock (not sold out / unavailable), output an object with fields: source, buy_url (direct product page URL), price (number in EGP if shown, else null), image (product image URL if known, else empty string), description (short English description, max 20 words). source must be exactly one of: ${validSources}. Output ONLY a raw JSON array, no markdown formatting, no commentary - an empty array if nothing confident is found.`;
-
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    tools: [{ google_search: {} }],
-  };
-
-  const res = await fetchWithTimeout(
-    GEMINI_URL,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-    GEMINI_GROUNDING_TIMEOUT_MS,
+  const candidatesByStore: Record<string, Candidate[]> = {};
+  await Promise.allSettled(
+    targetStores.map(async (storeKey) => {
+      const info = STORE_INFO[storeKey];
+      if (!info) return;
+      let results = await ddgSearch(`site:${info.domain} ${itemName}`);
+      let matches = results.filter((r) => hostMatches(r.url, info.domain));
+      if (!matches.length) {
+        results = await ddgSearch(`${itemName} ${info.label}`);
+        matches = results.filter((r) => hostMatches(r.url, info.domain));
+      }
+      if (matches.length) {
+        candidatesByStore[storeKey] = matches.slice(0, 3).map((r) => ({
+          title: r.title,
+          description: r.snippet.slice(0, 300),
+          url: r.url,
+          price: null,
+          image: '',
+          inStock: true,
+        }));
+      }
+    }),
   );
-  if (!res.ok) throw new Error(`Gemini grounding API error: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) return [];
 
-  let cleaned = text.trim();
-  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) cleaned = fenceMatch[1].trim();
-  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
-  if (!arrMatch) return [];
+  if (!Object.keys(candidatesByStore).length) return [];
 
-  let parsed: any[];
-  try {
-    parsed = JSON.parse(arrMatch[0]);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+  const verdicts = await verifyAllMatches(itemName, context, candidatesByStore);
 
-  return parsed
-    .filter((r) => r && typeof r === 'object' && targetStores.includes(r.source) && r.buy_url)
-    .map((r) => ({
-      source: String(r.source),
-      buy_url: String(r.buy_url),
-      price: r.price === null || r.price === undefined || r.price === '' ? null : (Number(r.price) || null),
-      image: r.image ? String(r.image) : '',
-      description: r.description ? String(r.description) : '',
-    }));
+  const results: Array<{ source: string; buy_url: string; price: number | null; image: string; description: string }> = [];
+  await Promise.allSettled(
+    Object.entries(candidatesByStore).map(async ([storeKey, candidates]) => {
+      const v = verdicts[storeKey];
+      if (!v || v.matchIndex === null || v.confidence < CONFIDENCE_THRESHOLD) return;
+      const c = candidates[v.matchIndex];
+      if (!c) return;
+      const meta = await fetchPageMeta(c.url);
+      if (meta.inStock === false) return;
+      results.push({
+        source: storeKey,
+        buy_url: c.url,
+        price: meta.price,
+        image: meta.image,
+        description: v.description || c.description,
+      });
+    }),
+  );
+  return results;
 }
 
 // ── main handler ──────────────────────────────────────────────────────────
@@ -362,8 +433,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
 
   try {
-    if (!GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY secret is not configured for this project');
+    if (!GROQ_API_KEY) {
+      throw new Error('GROQ_API_KEY secret is not configured for this project');
     }
 
     const { id, table } = await req.json();
@@ -405,7 +476,7 @@ Deno.serve(async (req: Request) => {
       }),
     );
 
-    // 2. One combined Gemini call verifies matches across all stores at once.
+    // 2. One combined Groq call verifies matches across all stores at once.
     if (Object.keys(candidatesByStore).length) {
       try {
         const verdicts = await verifyAllMatches(row.name, context, candidatesByStore);
@@ -438,10 +509,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 3. Google/Amazon fallback for everything not yet found, plus Amazon.
+    // 3. DuckDuckGo + Amazon fallback for everything not yet found, plus Amazon.
     const fallbackTargets = Array.from(new Set([...notFound, 'Amazon']));
     try {
-      const fallbackResults = await searchGoogleFallback(row.name, context, fallbackTargets);
+      const fallbackResults = await searchFallback(row.name, context, fallbackTargets);
       for (const r of fallbackResults) {
         const entry = { source: r.source, buy_url: r.buy_url, price: r.price, image: r.image, description: r.description };
         const idx = sources.findIndex((s) => s.source === r.source);
@@ -453,7 +524,7 @@ Deno.serve(async (req: Request) => {
       }
       if (!found.includes('Amazon') && !notFound.includes('Amazon')) notFound.push('Amazon');
     } catch (err) {
-      errors['_google_fallback'] = err instanceof Error ? err.message : String(err);
+      errors['_fallback'] = err instanceof Error ? err.message : String(err);
       if (!found.includes('Amazon') && !notFound.includes('Amazon')) notFound.push('Amazon');
     }
 

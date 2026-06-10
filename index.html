@@ -1684,8 +1684,9 @@ function closeDel()    { document.getElementById('delModal').classList.remove('o
 function closeDelIf(e) { if(e.target===document.getElementById('delModal')) closeDel(); }
 
 /* ═══════════════════════════════════════════════════════
-   FIND SOURCES — auto-search the 7 online stores via the
-   find-product-sources Supabase Edge Function
+   FIND SOURCES — auto-search the online stores (+ Amazon via
+   a DuckDuckGo fallback) via the find-product-sources
+   Supabase Edge Function
 ═══════════════════════════════════════════════════════ */
 async function findSources(id, table) {
   const btn = document.getElementById(`find-${table}-${id}`);
