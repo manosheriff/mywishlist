@@ -685,13 +685,12 @@ const STORES = [
 ];
 
 const SOURCE_GROUPS = [
-  { value:'circuits', label:'🟢 circuits-elec.com', match: s => /circuits/i.test(s) },
-  { value:'hd',       label:'🔵 HD Electronics',    match: s => /hd.?electron|hdelectronics/i.test(s) },
-  { value:'ram',      label:'🔵 RAM e-shop',        match: s => /\bram\b/i.test(s) },
-  { value:'uge',      label:'🟠 UGE-one',           match: s => /uge/i.test(s) },
-  { value:'microohm', label:'🔴 microohm-eg',       match: s => /microohm/i.test(s) },
-  { value:'future',   label:'🟡 Future Electronics', match: s => /future/i.test(s) },
-  { value:'external', label:'🏠 External / Local',  match: s => !/circuits|hd.?electron|hdelectronics|\bram\b|uge|microohm|future|owned/i.test(s) },
+  ...STORES.map(store => ({
+    value: store.source.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    label: store.label,
+    match: s => (s||'').trim().toLowerCase() === store.source.trim().toLowerCase(),
+  })),
+  { value:'other', label:'❓ Other', match: s => !STORES.some(store => (s||'').trim().toLowerCase() === store.source.trim().toLowerCase()) },
 ];
 
 /* ═══════════════════════════════════════════════════════
@@ -1302,7 +1301,7 @@ function renderDashboard() {
   const storeG = {};
   all.forEach(r => {
     const g = SOURCE_GROUPS.find(g => g.match(r.source||''));
-    const k = g ? g.label : '🏠 External';
+    const k = g.label;
     if(!storeG[k]) storeG[k]={n:0,cost:0};
     storeG[k].n++; storeG[k].cost += (r.qty||0)*(r.price||0);
   });
