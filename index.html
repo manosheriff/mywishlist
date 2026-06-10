@@ -16,6 +16,7 @@
   --amber:#e3b341; --amber-bg:rgba(227,179,65,.1);
   --red:#f85149;   --red-bg:rgba(248,81,73,.1);
   --purple:#bc8cff;
+  --orange:#ffa657; --orange-bg:rgba(255,166,87,.1);
   --shadow:0 1px 4px rgba(0,0,0,.5);
   --shadow-lg:0 8px 32px rgba(0,0,0,.6);
 }
@@ -28,6 +29,7 @@
   --amber:#9a6700; --amber-bg:rgba(154,103,0,.08);
   --red:#d1242f;   --red-bg:rgba(209,36,47,.08);
   --purple:#8250df;
+  --orange:#bc4c00; --orange-bg:rgba(188,76,0,.08);
   --shadow:0 1px 3px rgba(0,0,0,.12);
   --shadow-lg:0 8px 24px rgba(0,0,0,.15);
 }
@@ -40,6 +42,7 @@
   --amber:#b07820; --amber-bg:rgba(176,120,32,.1);
   --red:#b84040;   --red-bg:rgba(184,64,64,.1);
   --purple:#7060a0;
+  --orange:#c1652f; --orange-bg:rgba(193,101,47,.1);
   --shadow:0 1px 3px rgba(100,70,40,.15);
   --shadow-lg:0 8px 24px rgba(100,70,40,.2);
 }
@@ -290,6 +293,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 .buy-btn.grey  {background:var(--surface2); color:var(--text3); border-color:var(--border)}
 .buy-btn.navy  {background:var(--blue-bg);  color:var(--blue);  border-color:var(--blue-bg)}
 .buy-btn.amber {background:var(--amber-bg); color:var(--amber); border-color:var(--amber-bg)}
+.buy-btn.orange{background:var(--orange-bg);color:var(--orange);border-color:var(--orange-bg)}
 .buy-thumb{width:16px;height:16px;object-fit:cover;border-radius:3px;margin-right:5px;flex-shrink:0}
 
 /* ── TABLE FOOTER ───────────────────────────────────────── */
@@ -678,6 +682,7 @@ const STORES = [
   { source: 'microohm-eg.com',    label: '🔴 microohm-eg',       url: 'https://microohm-eg.com',     cls: 'red'    },
   { source: 'future-electronics', label: '🟡 Future Electronics', url: 'https://store.fut-electronics.com', cls: 'amber'  },
   { source: 'Ampere Electronics', label: '🟤 Ampere Electronics', url: 'https://ampere-electronics.com',     cls: 'navy'   },
+  { source: 'Amazon',             label: '🟧 Amazon',            url: 'https://www.amazon.eg',       cls: 'orange' },
   { source: 'Unknown',            label: '❓ Unknown',           url: '',                            cls: 'grey'   },
   { source: 'Hardware store',     label: '🔨 Hardware store',    url: '',                            cls: 'slate'  },
   { source: 'Pharmacy',           label: '💊 Pharmacy',          url: '',                            cls: 'purple' },
