@@ -690,7 +690,8 @@ const SOURCE_GROUPS = [
   { value:'ram',      label:'🔵 RAM e-shop',        match: s => /\bram\b/i.test(s) },
   { value:'uge',      label:'🟠 UGE-one',           match: s => /uge/i.test(s) },
   { value:'microohm', label:'🔴 microohm-eg',       match: s => /microohm/i.test(s) },
-  { value:'external', label:'🏠 External / Local',  match: s => !/circuits|hd.?electron|hdelectronics|\bram\b|uge|microohm|owned/i.test(s) },
+  { value:'future',   label:'🟡 Future Electronics', match: s => /future/i.test(s) },
+  { value:'external', label:'🏠 External / Local',  match: s => !/circuits|hd.?electron|hdelectronics|\bram\b|uge|microohm|future|owned/i.test(s) },
 ];
 
 /* ═══════════════════════════════════════════════════════
