@@ -294,7 +294,9 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 .buy-btn.navy  {background:var(--blue-bg);  color:var(--blue);  border-color:var(--blue-bg)}
 .buy-btn.amber {background:var(--amber-bg); color:var(--amber); border-color:var(--amber-bg)}
 .buy-btn.orange{background:var(--orange-bg);color:var(--orange);border-color:var(--orange-bg)}
-.buy-thumb{width:16px;height:16px;object-fit:cover;border-radius:3px;margin-right:5px;flex-shrink:0}
+.buy-btn.is-lowest{box-shadow:0 0 0 1.5px var(--green) inset}
+.buy-thumb{width:24px;height:24px;object-fit:cover;border-radius:4px;margin-right:5px;flex-shrink:0}
+.lowest-tag{font-size:10px;font-weight:700;color:var(--green);white-space:nowrap;margin-top:2px}
 
 /* ── TABLE FOOTER ───────────────────────────────────────── */
 .tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;font-size:12px;color:var(--text3);flex-wrap:wrap;gap:6px}
@@ -709,6 +711,15 @@ function groupsForRow(row) {
   const other = SOURCE_GROUPS.find(g => g.value === 'other');
   if (!srcs.length) return [other];
   return srcs.map(s => SOURCE_GROUPS.find(g => g.match(s.source||'')) || other);
+}
+
+/* lowest price found across a row's sources (or null if none have a price) */
+function lowestSourcePrice(row) {
+  const prices = (row.sources||[])
+    .map(s => s.price)
+    .filter(p => p != null && p !== '' && !isNaN(Number(p)))
+    .map(Number);
+  return prices.length ? Math.min(...prices) : null;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1367,13 +1378,15 @@ function renderItems() {
   let n=0;
   document.getElementById('tableBody').innerHTML = items.map(r => {
     n++;
+    const lowest = lowestSourcePrice(r);
+    const lowestTag = lowest!=null ? `<div class="lowest-tag" title="Lowest price found online">🏷 ${lowest.toLocaleString()}</div>` : '';
     return `<tr>
       <td class="col-sel"><input type="checkbox" ${selectedWishlist.has(r.id)?'checked':''} onchange="toggleSelectRow(${r.id}, this.checked)"></td>
       <td class="col-chk"><button class="cb-buy" onclick="markPurchased(${r.id})" title="Mark purchased — moves to inventory">🛒</button></td>
       <td class="col-num">${n}</td>
       <td class="col-desc">${e(r.name||'')}</td>
       <td class="col-qty">${r.qty||0}</td>
-      <td class="col-price">${(r.price||0).toLocaleString()}</td>
+      <td class="col-price">${(r.price||0).toLocaleString()}${lowestTag}</td>
       <td class="col-total">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
       <td class="col-buy">${buyBtn(r)}</td>
       <td class="col-crit">${r.critical?'<span class="crit-badge">⚠</span>':''}</td>
@@ -1715,17 +1728,24 @@ async function findSources(id, table) {
 function buyBtn(row) {
   const sources = row.sources || [];
   if (!sources.length) return '';
+  const lowest = lowestSourcePrice(row);
   return `<div class="buy-btns">${sources.map(s => {
     const store = STORES.find(st => st.source === (s.source||''));
     const label = store ? store.label : (s.source||'');
     const cls   = store ? store.cls : 'slate';
     const url   = s.buy_url || '';
     const thumb = s.image ? `<img class="buy-thumb" src="${e(s.image)}" alt="">` : '';
-    const price = (s.price!=null && s.price!=='') ? ` · ${Number(s.price).toLocaleString()} LE` : '';
-    const title = s.description ? ` title="${e(s.description)}"` : '';
-    const inner = `${thumb}${e(label)}${price}`;
-    if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}"${title}>${inner}</a>`;
-    return `<span class="buy-btn ${cls}"${title}>${inner}</span>`;
+    const hasPrice = s.price!=null && s.price!=='';
+    const isLowest = hasPrice && lowest!=null && Number(s.price)===lowest;
+    const price = hasPrice ? ` · ${Number(s.price).toLocaleString()} LE` : '';
+    const titleParts = [];
+    if (s.description) titleParts.push(s.description);
+    if (isLowest) titleParts.push('Lowest price found');
+    const title = titleParts.length ? ` title="${e(titleParts.join(' — '))}"` : '';
+    const cls2 = cls + (isLowest ? ' is-lowest' : '');
+    const inner = `${thumb}${e(label)}${price}${isLowest ? ' 🏷' : ''}`;
+    if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls2}"${title}>${inner}</a>`;
+    return `<span class="buy-btn ${cls2}"${title}>${inner}</span>`;
   }).join('')}</div>`;
 }
 
@@ -1740,10 +1760,13 @@ function showReport(type) {
     const rem = rows;
     const byStore = {};
     rem.forEach(r => {
+      const srcs = r.sources || [];
       groupsForRow(r).forEach(g => {
         const k = g.label;
         if(!byStore[k]) byStore[k]=[];
-        byStore[k].push(r);
+        const match = srcs.find(s => g.match(s.source||''));
+        const unit = (match && match.price!=null && match.price!=='') ? Number(match.price) : (r.price||0);
+        byStore[k].push({...r, _unit: unit});
       });
     });
     const grand = rem.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
@@ -1751,7 +1774,7 @@ function showReport(type) {
       <div class="rpt-title">🛒 Shopping List — by Store</div>
       <div class="rpt-date">Generated ${now} · ${rem.length} items remaining</div>
       ${Object.entries(byStore).map(([store,its])=>{
-        const st=its.reduce((s,i)=>s+(i.qty||0)*(i.price||0),0);
+        const st=its.reduce((s,i)=>s+(i.qty||0)*(i._unit||0),0);
         return `<div class="rpt-group">
           <div class="rpt-group-title">📍 ${e(store)}</div>
           <table class="rpt-table">
@@ -1760,8 +1783,8 @@ function showReport(type) {
               ${its.map(i=>`<tr>
                 <td>${e(i.name||'')}${i.critical?' <span class="crit-badge">⚠</span>':''}</td>
                 <td class="td-num">${i.qty||0}</td>
-                <td class="td-num">${(i.price||0).toLocaleString()}</td>
-                <td class="td-num">${((i.qty||0)*(i.price||0)).toLocaleString()}</td>
+                <td class="td-num">${(i._unit||0).toLocaleString()}</td>
+                <td class="td-num">${((i.qty||0)*(i._unit||0)).toLocaleString()}</td>
               </tr>`).join('')}
               <tr class="rpt-subtotal"><td colspan="3"><strong>Subtotal — ${e(store)}</strong></td><td class="td-num"><strong>${st.toLocaleString()} LE</strong></td></tr>
             </tbody>
