@@ -668,6 +668,7 @@ const STORES = [
   { source: 'RAM Electronics',    label: '🔵 RAM e-shop',        url: 'https://www.ram-e-shop.com' },
   { source: 'uge-one.com',        label: '🟠 UGE Electronics',   url: 'https://uge-one.com' },
   { source: 'microohm-eg.com',    label: '🔴 microohm-eg',       url: 'https://microohm-eg.com' },
+  { source: 'future-electronics', label: '🟡 Future Electronics', url: '' },
   { source: 'Attaba Market',      label: '🏪 Attaba Market',     url: '' },
   { source: 'Hardware store',     label: '🔨 Hardware store',    url: '' },
   { source: 'Pharmacy',           label: '💊 Pharmacy',          url: '' },
@@ -1073,19 +1074,21 @@ function setTab(name) {
    FILTERS
 ═══════════════════════════════════════════════════════ */
 function populateFilters() {
-  const cats = [...new Set(rows.map(r => r.category).filter(Boolean))].sort();
-  const catOpts = '<option value="">All Categories</option>' +
+  const wishCats = [...new Set(rows.map(r => r.category).filter(Boolean))].sort();
+  const invCats  = [...new Set(invRows.map(r => r.category).filter(Boolean))].sort();
+  const optsFor  = cats => '<option value="">All Categories</option>' +
     cats.map(c => `<option value="${e(c)}">${c}</option>`).join('');
-  document.getElementById('fCat').innerHTML = catOpts;
-  document.getElementById('iCat').innerHTML = catOpts;
+  document.getElementById('fCat').innerHTML = optsFor(wishCats);
+  document.getElementById('iCat').innerHTML = optsFor(invCats);
 
-  document.getElementById('catDatalist').innerHTML = cats.map(c => `<option value="${e(c)}">`).join('');
+  const allCats = [...new Set([...wishCats, ...invCats])].sort();
+  document.getElementById('catDatalist').innerHTML = allCats.map(c => `<option value="${e(c)}">`).join('');
 
-  const srcOpts = '<option value="">All Sources</option>' +
-    SOURCE_GROUPS.filter(g => rows.some(r => g.match(r.source || '')))
+  const srcOptsFor = arr => '<option value="">All Sources</option>' +
+    SOURCE_GROUPS.filter(g => arr.some(r => g.match(r.source || '')))
       .map(g => `<option value="${g.value}">${g.label}</option>`).join('');
-  document.getElementById('fSource').innerHTML = srcOpts;
-  document.getElementById('iSource').innerHTML = srcOpts;
+  document.getElementById('fSource').innerHTML = srcOptsFor(rows);
+  document.getElementById('iSource').innerHTML = srcOptsFor(invRows);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1491,6 +1494,7 @@ function buyBtnClass(label, url) {
   if (/ram-e-shop|ram electronics/i.test(s)) return 'teal';
   if (/uge-one|uge electronics/i.test(s))    return 'slate';
   if (/microohm/i.test(s))                   return 'red';
+  if (/future.?electron/i.test(s))           return 'amber';
   if (/hdelectronics|hd electronics/i.test(s)) return 'teal';
   if (/pharmacy/i.test(s))                   return 'purple';
   if (/print shop/i.test(s))                 return 'navy';
