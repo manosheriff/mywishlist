@@ -239,8 +239,8 @@ body{
 .col-buy{min-width:126px}
 .buy-btns{display:flex;flex-wrap:wrap;gap:4px}
 .col-crit{width:50px;text-align:center}
-.col-act{width:72px;text-align:right}
-.col-act3{width:96px;text-align:right}
+.col-act{width:104px;text-align:right}
+.col-act3{width:136px;text-align:right}
 .col-desc{min-width:200px}
 td.col-num,td.col-qty,td.col-price,td.col-total{text-align:right;font-variant-numeric:tabular-nums}
 
@@ -290,6 +290,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 .buy-btn.grey  {background:var(--surface2); color:var(--text3); border-color:var(--border)}
 .buy-btn.navy  {background:var(--blue-bg);  color:var(--blue);  border-color:var(--blue-bg)}
 .buy-btn.amber {background:var(--amber-bg); color:var(--amber); border-color:var(--amber-bg)}
+.buy-thumb{width:16px;height:16px;object-fit:cover;border-radius:3px;margin-right:5px;flex-shrink:0}
 
 /* ── TABLE FOOTER ───────────────────────────────────────── */
 .tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;font-size:12px;color:var(--text3);flex-wrap:wrap;gap:6px}
@@ -675,8 +676,8 @@ const STORES = [
   { source: 'RAM Electronics',    label: '🔵 RAM e-shop',        url: 'https://www.ram-e-shop.com',  cls: 'teal'   },
   { source: 'uge-one.com',        label: '🟠 UGE Electronics',   url: 'https://uge-one.com',         cls: 'slate'  },
   { source: 'microohm-eg.com',    label: '🔴 microohm-eg',       url: 'https://microohm-eg.com',     cls: 'red'    },
-  { source: 'future-electronics', label: '🟡 Future Electronics', url: '',                           cls: 'amber'  },
-  { source: 'Ampere Electronics', label: '🟤 Ampere Electronics', url: '',                           cls: 'navy'   },
+  { source: 'future-electronics', label: '🟡 Future Electronics', url: 'https://store.fut-electronics.com', cls: 'amber'  },
+  { source: 'Ampere Electronics', label: '🟤 Ampere Electronics', url: 'https://ampere-electronics.com',     cls: 'navy'   },
   { source: 'Unknown',            label: '❓ Unknown',           url: '',                            cls: 'grey'   },
   { source: 'Hardware store',     label: '🔨 Hardware store',    url: '',                            cls: 'slate'  },
   { source: 'Pharmacy',           label: '💊 Pharmacy',          url: '',                            cls: 'purple' },
@@ -1372,6 +1373,7 @@ function renderItems() {
       <td class="col-buy">${buyBtn(r)}</td>
       <td class="col-crit">${r.critical?'<span class="crit-badge">⚠</span>':''}</td>
       <td class="col-act"><div class="row-actions">
+        <button class="btn-icon" id="find-bom_items-${r.id}" onclick="findSources(${r.id},'bom_items')" title="Find sources online">🔎</button>
         <button class="btn-icon" onclick="openEdit(${r.id})" title="Edit">✎</button>
         <button class="btn-icon del" onclick="openDel(${r.id})" title="Delete">🗑</button>
       </div></td>
@@ -1454,6 +1456,7 @@ function renderInventory() {
       <td class="col-total">${(qty*(r.price||0)).toLocaleString()}</td>
       <td class="col-buy">${buyBtn(r)}</td>
       <td class="col-act3"><div class="row-actions">
+        <button class="btn-icon" id="find-inventory-${r.id}" onclick="findSources(${r.id},'inventory')" title="Find sources online">🔎</button>
         <button class="btn-icon" onclick="addToWishlist(${r.id})" title="Add to wishlist">🛒</button>
         <button class="btn-icon" onclick="openEdit(${r.id},'inventory')" title="Edit">✎</button>
         <button class="btn-icon del" onclick="openDel(${r.id},'inventory')" title="Delete">🗑</button>
@@ -1600,10 +1603,22 @@ async function saveItem(ev) {
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   const isInv = editTarget === 'inventory';
 
-  const sources = [...document.querySelectorAll('#fSourcesGrid input[type=checkbox]:checked')].map(cb => ({
-    source:  cb.dataset.source,
-    buy_url: cb.closest('.source-row').querySelector('.source-url').value.trim(),
-  }));
+  const existing = editId ? (isInv ? invRows : rows).find(r => r.id === editId) : null;
+  const existingSources = existing?.sources || [];
+
+  const sources = [...document.querySelectorAll('#fSourcesGrid input[type=checkbox]:checked')].map(cb => {
+    const source  = cb.dataset.source;
+    const buy_url = cb.closest('.source-row').querySelector('.source-url').value.trim();
+    const entry   = { source, buy_url };
+    const prev = existingSources.find(s => s.source === source);
+    // Keep AI-found price/image/description as long as the buy link wasn't changed
+    if (prev && (prev.buy_url||'') === buy_url) {
+      if (prev.price != null)  entry.price       = prev.price;
+      if (prev.image)          entry.image       = prev.image;
+      if (prev.description)    entry.description = prev.description;
+    }
+    return entry;
+  });
   const common = {
     name:        document.getElementById('fName').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
@@ -1664,8 +1679,32 @@ function closeDel()    { document.getElementById('delModal').classList.remove('o
 function closeDelIf(e) { if(e.target===document.getElementById('delModal')) closeDel(); }
 
 /* ═══════════════════════════════════════════════════════
-   BUY BUTTON  (label always derived from source; buy_url
-   is the per-item product link from Supabase)
+   FIND SOURCES — auto-search the 7 online stores via the
+   find-product-sources Supabase Edge Function
+═══════════════════════════════════════════════════════ */
+async function findSources(id, table) {
+  const btn = document.getElementById(`find-${table}-${id}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  try {
+    const { data, error } = await sb.functions.invoke('find-product-sources', { body: { id, table } });
+    if (error) throw error;
+    const label = key => STORES.find(s => s.source === key)?.label || key;
+    const found    = (data?.found || []).map(label);
+    const notFound = (data?.notFound || []).map(label);
+    let msg = found.length ? `Found at ${found.length} store${found.length!==1?'s':''}: ${found.join(', ')}` : 'No matches found';
+    if (notFound.length) msg += ` · Not found: ${notFound.join(', ')}`;
+    toast(msg, found.length ? 'green' : 'amber');
+    await loadItems();
+  } catch (err) {
+    toast('Find sources failed: ' + (err.message || err), 'red');
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔎'; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   BUY BUTTON  (label always derived from source; buy_url,
+   price, image and description come from Supabase — either
+   entered manually or filled in by Find Sources)
 ═══════════════════════════════════════════════════════ */
 function buyBtn(row) {
   const sources = row.sources || [];
@@ -1675,8 +1714,12 @@ function buyBtn(row) {
     const label = store ? store.label : (s.source||'');
     const cls   = store ? store.cls : 'slate';
     const url   = s.buy_url || '';
-    if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}">${e(label)}</a>`;
-    return `<span class="buy-btn ${cls}">${e(label)}</span>`;
+    const thumb = s.image ? `<img class="buy-thumb" src="${e(s.image)}" alt="">` : '';
+    const price = (s.price!=null && s.price!=='') ? ` · ${Number(s.price).toLocaleString()} LE` : '';
+    const title = s.description ? ` title="${e(s.description)}"` : '';
+    const inner = `${thumb}${e(label)}${price}`;
+    if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}"${title}>${inner}</a>`;
+    return `<span class="buy-btn ${cls}"${title}>${inner}</span>`;
   }).join('')}</div>`;
 }
 
