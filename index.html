@@ -236,7 +236,8 @@ body{
 .col-qtyctrl{width:104px;text-align:center}
 .col-price{width:70px;text-align:right;font-variant-numeric:tabular-nums}
 .col-total{width:72px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-.col-buy{width:126px}
+.col-buy{min-width:126px}
+.buy-btns{display:flex;flex-wrap:wrap;gap:4px}
 .col-crit{width:50px;text-align:center}
 .col-act{width:72px;text-align:right}
 .col-act3{width:96px;text-align:right}
@@ -312,6 +313,12 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 .form-textarea{resize:vertical;min-height:65px}
 .form-check{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text2)}
 .form-check input{width:15px;height:15px;cursor:pointer;accent-color:var(--green)}
+
+/* ── SOURCES GRID (multi-store picker) ───────────────────── */
+.sources-grid{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--surface2)}
+.source-row{display:flex;align-items:center;gap:8px}
+.source-row .form-check{flex:0 0 160px}
+.source-row .source-url{flex:1;min-width:0}
 
 /* ── REPORTS ────────────────────────────────────────────── */
 .rpt-actions{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
@@ -555,10 +562,6 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
           <datalist id="catDatalist"></datalist>
         </div>
         <div class="form-group">
-          <label class="form-label">Source / Store</label>
-          <select id="fSourceModal" class="form-select"></select>
-        </div>
-        <div class="form-group">
           <label class="form-label">Qty *</label>
           <input type="number" id="fQty" class="form-input" min="1" value="1" required>
         </div>
@@ -566,16 +569,16 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
           <label class="form-label">Unit Price (LE) *</label>
           <input type="number" id="fPrice" class="form-input" min="0" step="0.5" value="0" required>
         </div>
+        <div class="form-group wishlist-only" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+          <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
+        </div>
+        <div class="form-group span2">
+          <label class="form-label">Available at</label>
+          <div id="fSourcesGrid" class="sources-grid"></div>
+        </div>
         <div class="form-group span2">
           <label class="form-label">Notes</label>
           <textarea id="fNotes" class="form-textarea" placeholder="Additional notes…"></textarea>
-        </div>
-        <div class="form-group span2">
-          <label class="form-label">Buy Link URL</label>
-          <input type="url" id="fBuyUrl" class="form-input" placeholder="https://circuits-elec.com/products/...">
-        </div>
-        <div class="form-group wishlist-only" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
-          <label class="form-check"><input type="checkbox" id="fCritical"> Mark as Critical</label>
         </div>
       </div>
       <div class="modal-footer">
@@ -692,6 +695,15 @@ const SOURCE_GROUPS = [
   })),
   { value:'other', label:'❓ Other', match: s => !STORES.some(store => (s||'').trim().toLowerCase() === store.source.trim().toLowerCase()) },
 ];
+
+/* a row can be available at several stores — return one
+   SOURCE_GROUPS entry per source, or just "other" if none set */
+function groupsForRow(row) {
+  const srcs = row.sources || [];
+  const other = SOURCE_GROUPS.find(g => g.value === 'other');
+  if (!srcs.length) return [other];
+  return srcs.map(s => SOURCE_GROUPS.find(g => g.match(s.source||'')) || other);
+}
 
 /* ═══════════════════════════════════════════════════════
    STATE
@@ -913,12 +925,11 @@ async function archiveDeleted(row, sourceTable) {
     original_id:  row.id,
     name:      row.name,
     category:  row.category,
-    source:    row.source,
+    sources:   row.sources ?? [],
     qty:       row.qty,
     price:     row.price,
     notes:     row.notes,
     critical:  row.critical ?? null,
-    buy_url:   row.buy_url ?? null,
   });
   if (error) throw error;
 }
@@ -929,8 +940,7 @@ async function restoreItem(id) {
   if (!confirm(`Restore "${r.name}" to your ${dest === 'inventory' ? 'inventory' : 'wishlist'}?`)) return;
   try {
     const base = {
-      name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes,
-      buy_url: r.buy_url || '',
+      name: r.name, category: r.category, sources: r.sources || [], qty: r.qty, price: r.price, notes: r.notes,
     };
     if (dest === 'inventory') await invInsert(base);
     else await dbInsert({ ...base, critical: r.critical || false });
@@ -975,9 +985,8 @@ async function markPurchased(id) {
       await invUpdate(match.id, { qty: (match.qty||0) + (r.qty||0) });
     } else {
       await invInsert({
-        name: r.name, category: r.category, source: r.source,
+        name: r.name, category: r.category, sources: r.sources||[],
         qty: r.qty, price: r.price, notes: r.notes,
-        buy_url: r.buy_url||'',
       });
     }
     await dbDeleteRaw(r.id);
@@ -1029,9 +1038,8 @@ async function bulkMoveToInventory() {
         match.qty = newQty;
       } else {
         const created = await invInsert({
-          name: r.name, category: r.category, source: r.source,
+          name: r.name, category: r.category, sources: r.sources||[],
           qty: r.qty, price: r.price, notes: r.notes,
-          buy_url: r.buy_url||'',
         });
         working.push({ id: created.id, name: created.name, qty: created.qty });
       }
@@ -1095,9 +1103,9 @@ async function bulkAddToWishlist() {
         await dbUpdate(match.id, { qty: (match.qty||0) + 1 });
       } else {
         await dbInsert({
-          name: r.name, category: r.category, source: r.source,
+          name: r.name, category: r.category, sources: r.sources||[],
           qty: 1, price: r.price, notes: r.notes,
-          buy_url: r.buy_url||'', critical: false,
+          critical: false,
         });
       }
       added++;
@@ -1165,8 +1173,7 @@ async function bulkRestore() {
       const r = delRows.find(x => x.id === id); if (!r) continue;
       const dest = r.source_table === 'inventory' ? 'inventory' : 'wishlist';
       const base = {
-        name: r.name, category: r.category, source: r.source, qty: r.qty, price: r.price, notes: r.notes,
-        buy_url: r.buy_url || '',
+        name: r.name, category: r.category, sources: r.sources || [], qty: r.qty, price: r.price, notes: r.notes,
       };
       try {
         if (dest === 'inventory') await invInsert(base);
@@ -1252,7 +1259,7 @@ function populateFilters() {
   document.getElementById('catDatalist').innerHTML = allCats.map(c => `<option value="${e(c)}">`).join('');
 
   const srcOptsFor = arr => '<option value="">All Sources</option>' +
-    SOURCE_GROUPS.filter(g => arr.some(r => g.match(r.source || '')))
+    SOURCE_GROUPS.filter(g => arr.some(r => groupsForRow(r).includes(g)))
       .map(g => `<option value="${g.value}">${g.label}</option>`).join('');
   document.getElementById('fSource').innerHTML = srcOptsFor(rows);
   document.getElementById('iSource').innerHTML = srcOptsFor(invRows);
@@ -1300,10 +1307,11 @@ function renderDashboard() {
 
   const storeG = {};
   all.forEach(r => {
-    const g = SOURCE_GROUPS.find(g => g.match(r.source||''));
-    const k = g.label;
-    if(!storeG[k]) storeG[k]={n:0,cost:0};
-    storeG[k].n++; storeG[k].cost += (r.qty||0)*(r.price||0);
+    groupsForRow(r).forEach(g => {
+      const k = g.label;
+      if(!storeG[k]) storeG[k]={n:0,cost:0};
+      storeG[k].n++; storeG[k].cost += (r.qty||0)*(r.price||0);
+    });
   });
   document.getElementById('dashStore').innerHTML = `<table class="mini-table">
     ${Object.entries(storeG).map(([s,{n,cost}]) => `
@@ -1328,9 +1336,9 @@ function renderItems() {
   if (search) items = items.filter(r =>
     (r.name||'').toLowerCase().includes(search) ||
     (r.notes||'').toLowerCase().includes(search) ||
-    (r.source||'').toLowerCase().includes(search));
+    (r.sources||[]).some(s => (s.source||'').toLowerCase().includes(search)));
   if (fCat)  items = items.filter(r => r.category === fCat);
-  if (fSrc)  { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>g.match(r.source||'')); }
+  if (fSrc)  { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>groupsForRow(r).includes(g)); }
   if (fStat === 'critical') items = items.filter(r => r.critical);
 
   if (sortCol) {
@@ -1406,9 +1414,9 @@ function renderInventory() {
   if (search) items = items.filter(r =>
     (r.name||'').toLowerCase().includes(search) ||
     (r.notes||'').toLowerCase().includes(search) ||
-    (r.source||'').toLowerCase().includes(search));
+    (r.sources||[]).some(s => (s.source||'').toLowerCase().includes(search)));
   if (fCat) items = items.filter(r => r.category === fCat);
-  if (fSrc) { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>g.match(r.source||'')); }
+  if (fSrc) { const g = SOURCE_GROUPS.find(g=>g.value===fSrc); if(g) items=items.filter(r=>groupsForRow(r).includes(g)); }
 
   if (invSortCol) {
     items.sort((a, b) => {
@@ -1516,10 +1524,23 @@ function renderTrash() {
 /* ═══════════════════════════════════════════════════════
    CRUD — ADD / EDIT (wishlist)
 ═══════════════════════════════════════════════════════ */
-function populateStoreDropdowns(selectedSource) {
-  const srcSel = document.getElementById('fSourceModal');
-  srcSel.innerHTML = STORES.map(s => `<option value="${e(s.source)}">${e(s.source)}</option>`).join('');
-  if (selectedSource) srcSel.value = selectedSource;
+function populateSourcesGrid(selectedSources) {
+  const grid = document.getElementById('fSourcesGrid');
+  grid.innerHTML = STORES.map(s => {
+    const match = (selectedSources||[]).find(x => x.source === s.source);
+    const checked = !!match;
+    const url = match ? (match.buy_url||'') : '';
+    return `<div class="source-row">
+      <label class="form-check"><input type="checkbox" data-source="${e(s.source)}" ${checked?'checked':''} onchange="toggleSourceRow(this)"> ${s.label}</label>
+      <input type="url" class="form-input source-url" placeholder="Product link (optional)" value="${e(url)}" style="${checked?'':'display:none'}">
+    </div>`;
+  }).join('');
+}
+
+function toggleSourceRow(checkbox) {
+  const urlInput = checkbox.closest('.source-row').querySelector('.source-url');
+  urlInput.style.display = checkbox.checked ? '' : 'none';
+  if (!checkbox.checked) urlInput.value = '';
 }
 
 function checkInventoryMatch() {
@@ -1538,7 +1559,7 @@ function openAdd(target = 'wishlist') {
   document.getElementById('saveBtn').textContent   = 'Add Item';
   document.getElementById('editForm').reset();
   document.getElementById('fNameHint').textContent = '';
-  populateStoreDropdowns();
+  populateSourcesGrid([]);
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -1552,11 +1573,10 @@ function openEdit(id, target = 'wishlist') {
   document.getElementById('saveBtn').textContent      = 'Save Changes';
   document.getElementById('fName').value              = r.name||'';
   document.getElementById('fCatInput').value          = r.category||'';
-  populateStoreDropdowns(r.source||'');
+  populateSourcesGrid(r.sources||[]);
   document.getElementById('fQty').value               = r.qty||1;
   document.getElementById('fPrice').value             = r.price||0;
   document.getElementById('fNotes').value             = r.notes||'';
-  document.getElementById('fBuyUrl').value            = r.buy_url||'';
   document.getElementById('fCritical').checked        = r.critical||false;
   document.getElementById('fNameHint').textContent    = '';
   document.getElementById('editModal').classList.add('open');
@@ -1567,11 +1587,10 @@ function addToWishlist(id) {
   openAdd('wishlist');
   document.getElementById('fName').value     = r.name||'';
   document.getElementById('fCatInput').value = r.category||'';
-  populateStoreDropdowns(r.source||'');
+  populateSourcesGrid(r.sources||[]);
   document.getElementById('fQty').value      = 1;
   document.getElementById('fPrice').value    = r.price||0;
   document.getElementById('fNotes').value    = r.notes||'';
-  document.getElementById('fBuyUrl').value   = r.buy_url||'';
   checkInventoryMatch();
 }
 
@@ -1581,15 +1600,17 @@ async function saveItem(ev) {
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   const isInv = editTarget === 'inventory';
 
-  const source = document.getElementById('fSourceModal').value;
+  const sources = [...document.querySelectorAll('#fSourcesGrid input[type=checkbox]:checked')].map(cb => ({
+    source:  cb.dataset.source,
+    buy_url: cb.closest('.source-row').querySelector('.source-url').value.trim(),
+  }));
   const common = {
     name:        document.getElementById('fName').value.trim(),
     category:    document.getElementById('fCatInput').value.trim(),
-    source:      source,
+    sources:     sources,
     qty:         parseInt(document.getElementById('fQty').value)||1,
     price:       parseFloat(document.getElementById('fPrice').value)||0,
     notes:       document.getElementById('fNotes').value.trim(),
-    buy_url:     document.getElementById('fBuyUrl').value.trim(),
   };
   const payload = isInv ? common : {
     ...common,
@@ -1647,13 +1668,16 @@ function closeDelIf(e) { if(e.target===document.getElementById('delModal')) clos
    is the per-item product link from Supabase)
 ═══════════════════════════════════════════════════════ */
 function buyBtn(row) {
-  const store = STORES.find(s => s.source === (row.source||''));
-  const label = store ? store.label : '';
-  const url   = row.buy_url || '';
-  if (!label && !url) return '';
-  const cls = store ? store.cls : 'slate';
-  if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}">${e(label || url)}</a>`;
-  return `<span class="buy-btn ${cls}">${e(label)}</span>`;
+  const sources = row.sources || [];
+  if (!sources.length) return '';
+  return `<div class="buy-btns">${sources.map(s => {
+    const store = STORES.find(st => st.source === (s.source||''));
+    const label = store ? store.label : (s.source||'');
+    const cls   = store ? store.cls : 'slate';
+    const url   = s.buy_url || '';
+    if (url) return `<a href="${e(url)}" target="_blank" rel="noopener" class="buy-btn ${cls}">${e(label)}</a>`;
+    return `<span class="buy-btn ${cls}">${e(label)}</span>`;
+  }).join('')}</div>`;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1666,7 +1690,13 @@ function showReport(type) {
   if (type==='shopping') {
     const rem = rows;
     const byStore = {};
-    rem.forEach(r=>{const k=r.source||'Unknown';if(!byStore[k])byStore[k]=[];byStore[k].push(r);});
+    rem.forEach(r => {
+      groupsForRow(r).forEach(g => {
+        const k = g.label;
+        if(!byStore[k]) byStore[k]=[];
+        byStore[k].push(r);
+      });
+    });
     const grand = rem.reduce((s,r)=>s+(r.qty||0)*(r.price||0),0);
     html = `<div class="rpt-section">
       <div class="rpt-title">🛒 Shopping List — by Store</div>
@@ -1728,7 +1758,7 @@ function showReport(type) {
       <table class="rpt-table">
         <thead><tr><th>Name</th><th>Category</th><th>Source</th><th class="td-num">Total LE</th></tr></thead>
         <tbody>${crit.map(r=>`<tr>
-          <td>${e(r.name||'')}</td><td>${e(r.category||'')}</td><td>${e(r.source||'')}</td>
+          <td>${e(r.name||'')}</td><td>${e(r.category||'')}</td><td>${e(groupsForRow(r).map(g=>g.label).join(', '))}</td>
           <td class="td-num">${((r.qty||0)*(r.price||0)).toLocaleString()}</td>
         </tr>`).join('')}</tbody>
       </table>
