@@ -69,75 +69,25 @@ function normalizeUrl(base: string, src: string): string {
 }
 
 // ── Shopify adapter (circuits-elec.com, store.fut-electronics.com) ──────────
-// Different themes render search results differently, so try a couple of
-// known patterns and use whichever matches. "Sold out" detection is
-// best-effort: it relies on the price slot showing "Sold out" or a
-// badge--sold-out class near the product card.
-function parseShopifyGridTheme(html: string, base: string): Candidate[] {
-  const marker = '<div class="product grid__item';
-  const idxs: number[] = [];
-  let pos = 0;
-  while (true) {
-    const i = html.indexOf(marker, pos);
-    if (i === -1) break;
-    idxs.push(i);
-    pos = i + marker.length;
-  }
-  const out: Candidate[] = [];
-  for (let k = 0; k < idxs.length; k++) {
-    const chunk = html.slice(idxs[k], idxs[k + 1] ?? idxs[k] + 4000);
-    const titleM = chunk.match(/product__title[^>]*>\s*<a href="([^"]+)">([^<]+)<\/a>/);
-    if (!titleM) continue;
-    const imgM = chunk.match(/data-src="([^"]+)"/) || chunk.match(/<img[^>]*src="([^"]+)"/);
-    const priceM = chunk.match(/product__price">\s*(?:<span class="visually-hidden">[^<]*<\/span>\s*)?([^<]+)/);
-    const priceText = priceM ? priceM[1] : '';
-    const soldOut = /sold[\s-]?out/i.test(priceText) || /badge--sold-out/i.test(chunk.slice(0, 1200));
-    const href = titleM[1].split('?')[0];
-    out.push({
-      title: titleM[2].trim(),
-      url: href.startsWith('http') ? href : `${base}${href}`,
-      image: imgM ? normalizeUrl(base, imgM[1]) : '',
-      price: priceM ? parsePrice(priceText) : null,
-      description: '',
-      inStock: !soldOut,
-    });
-  }
-  return out;
-}
-
-function parseShopifySimpleTheme(html: string, base: string): Candidate[] {
-  const out: Candidate[] = [];
-  const re = /<a href="(\/products\/[^"?]+)[^"]*"\s+id="product-\d+"[^>]*>([\s\S]*?)<\/a>/g;
-  let m;
-  while ((m = re.exec(html))) {
-    const href = m[1];
-    const inner = m[2];
-    const titleM = inner.match(/<h3>([^<]+)<\/h3>/);
-    if (!titleM) continue;
-    const priceM = inner.match(/<h4>([^<]+)<\/h4>/);
-    const priceText = priceM ? priceM[1] : '';
-    const imgM = inner.match(/<img[^>]*src="([^"]+)"/);
-    const soldOut = /sold[\s-]?out/i.test(priceText) || /sold[\s-]?out/i.test(inner);
-    out.push({
-      title: titleM[1].trim(),
-      url: `${base}${href}`,
-      image: imgM ? normalizeUrl(base, imgM[1]) : '',
-      price: priceM ? parsePrice(priceText) : null,
-      description: '',
-      inStock: !soldOut,
-    });
-  }
-  return out;
-}
-
+// Uses Shopify's predictive-search JSON endpoint: it returns clean,
+// already-absolute image URLs and each product's "body" (description), which
+// is passed to Groq alongside the title for matching.
 function shopifyAdapter(base: string) {
   return async (q: string): Promise<Candidate[]> => {
-    const res = await fetchWithTimeout(`${base}/search?q=${encodeURIComponent(q)}&type=product`);
+    const url = `${base}/search/suggest.json?q=${encodeURIComponent(q)}&resources[type]=product&resources[limit]=${CANDIDATE_LIMIT}`;
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
-    const html = await res.text();
-    let candidates = parseShopifyGridTheme(html, base);
-    if (!candidates.length) candidates = parseShopifySimpleTheme(html, base);
-    return candidates.slice(0, CANDIDATE_LIMIT);
+    const data = await res.json();
+    const products = data?.resources?.results?.products;
+    if (!Array.isArray(products)) return [];
+    return products.map((p: any) => ({
+      title: p.title || '',
+      price: p.price != null ? parsePrice(String(p.price)) : null,
+      url: normalizeUrl(base, (p.url || '').split('?')[0]),
+      image: p.image || '',
+      description: stripHtml(p.body || '').slice(0, 500),
+      inStock: p.available !== false,
+    }));
   };
 }
 
@@ -195,12 +145,17 @@ function odooAdapter(base: string) {
       const title = titleM ? stripHtml(titleM[1]) : '';
       if (!title) continue;
       const imgM = chunk.match(/<img[^>]*src="([^"]+)"/);
+      // Search result cards list the product's category tags as buttons;
+      // surface them as a "description" so Groq has more than just the
+      // title to match against.
+      const categories = [...chunk.matchAll(/<button class="btn btn-link btn-sm p-0" onclick="location\.href='\/shop\/category\/[^']*'[^>]*>([^<]+)<\/button>/g)]
+        .map((m) => stripHtml(m[1]));
       out.push({
         title,
         price: parsePrice(priceM[1]),
         url: href.startsWith('http') ? href : `${base}${href}`,
         image: imgM ? normalizeUrl(base, imgM[1]) : '',
-        description: '',
+        description: categories.length ? `Category: ${categories.join(', ')}` : '',
         inStock: true,
       });
     }
@@ -338,6 +293,16 @@ function extractMeta(html: string, prop: string): string {
   return m ? m[1] : '';
 }
 
+// Best-effort extraction of a product's main image: try Open Graph tags
+// first, then fall back to Amazon's inline image attributes/JSON (Amazon
+// product pages don't expose og:image to non-browser requests).
+function extractProductImage(html: string): string {
+  const og = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image');
+  if (og) return og;
+  const m = html.match(/data-old-hires="([^"]+)"/) || html.match(/"hiRes":"([^"]+)"/) || html.match(/"large":"([^"]+)"/);
+  return m ? m[1].replace(/\\\//g, '/') : '';
+}
+
 // Best-effort extraction of image/price/availability from a product page,
 // via Open Graph tags and JSON-LD Product/Offer markup.
 async function fetchPageMeta(url: string): Promise<{ image: string; price: number | null; inStock: boolean }> {
@@ -345,7 +310,7 @@ async function fetchPageMeta(url: string): Promise<{ image: string; price: numbe
     const res = await fetchWithTimeout(url);
     if (!res.ok) return { image: '', price: null, inStock: true };
     const html = await res.text();
-    const image = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image');
+    const image = extractProductImage(html);
 
     let price: number | null = null;
     let availability = '';
@@ -482,29 +447,40 @@ Deno.serve(async (req: Request) => {
     if (Object.keys(candidatesByStore).length) {
       try {
         const verdicts = await verifyAllMatches(row.name, context, candidatesByStore);
-        for (const [storeKey, candidates] of Object.entries(candidatesByStore)) {
-          const v = verdicts[storeKey];
-          if (!v || v.matchIndex === null || v.confidence < CONFIDENCE_THRESHOLD) {
-            notFound.push(storeKey);
-            continue;
-          }
-          const c = candidates[v.matchIndex];
-          if (!c) {
-            notFound.push(storeKey);
-            continue;
-          }
-          const entry = {
-            source: storeKey,
-            buy_url: c.url,
-            price: c.price,
-            image: c.image,
-            description: v.description || c.description,
-          };
-          const idx = sources.findIndex((s) => s.source === storeKey);
-          if (idx >= 0) sources[idx] = { ...sources[idx], ...entry };
-          else sources.push(entry);
-          found.push(storeKey);
-        }
+        await Promise.allSettled(
+          Object.entries(candidatesByStore).map(async ([storeKey, candidates]) => {
+            const v = verdicts[storeKey];
+            if (!v || v.matchIndex === null || v.confidence < CONFIDENCE_THRESHOLD) {
+              notFound.push(storeKey);
+              return;
+            }
+            const c = candidates[v.matchIndex];
+            if (!c) {
+              notFound.push(storeKey);
+              return;
+            }
+            // Backfill image/price from the product page itself when the
+            // store's search results didn't include them.
+            let image = c.image;
+            let price = c.price;
+            if (!image || price === null) {
+              const meta = await fetchPageMeta(c.url);
+              if (!image) image = meta.image;
+              if (price === null) price = meta.price;
+            }
+            const entry = {
+              source: storeKey,
+              buy_url: c.url,
+              price,
+              image,
+              description: v.description || c.description,
+            };
+            const idx = sources.findIndex((s) => s.source === storeKey);
+            if (idx >= 0) sources[idx] = { ...sources[idx], ...entry };
+            else sources.push(entry);
+            found.push(storeKey);
+          }),
+        );
       } catch (err) {
         for (const storeKey of Object.keys(candidatesByStore)) notFound.push(storeKey);
         errors['_verify'] = err instanceof Error ? err.message : String(err);
