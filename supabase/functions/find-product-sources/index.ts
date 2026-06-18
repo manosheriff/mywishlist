@@ -44,7 +44,7 @@ async function fetchWithTimeout(url: string, opts: RequestInit = {}, timeoutMs =
     return await fetch(url, {
       ...opts,
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', ...(opts.headers || {}) },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9', ...(opts.headers || {}) },
     });
   } finally {
     clearTimeout(timer);
@@ -106,7 +106,7 @@ function wooAdapter(base: string) {
         title: p.name || '',
         price: isNaN(raw) ? null : raw / Math.pow(10, minor),
         url: p.permalink || '',
-        image: p.images?.[0]?.src || '',
+        image: p.images?.[0]?.src || p.images?.[0]?.thumbnail || '',
         description: stripHtml(p.short_description || p.description || '').slice(0, 500),
         inStock: p.is_in_stock !== false && p.is_purchasable !== false,
       };

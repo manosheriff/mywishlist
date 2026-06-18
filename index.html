@@ -1734,7 +1734,7 @@ function buyBtn(row) {
     const label = store ? store.label : (s.source||'');
     const cls   = store ? store.cls : 'slate';
     const url   = s.buy_url || '';
-    const thumb = s.image ? `<img class="buy-thumb" src="${e(s.image)}" alt="">` : '';
+    const thumb = s.image ? `<img class="buy-thumb" src="${e(s.image)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : '';
     const hasPrice = s.price!=null && s.price!=='';
     const isLowest = hasPrice && lowest!=null && Number(s.price)===lowest;
     const price = hasPrice ? ` · ${Number(s.price).toLocaleString()} LE` : '';
