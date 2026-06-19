@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Padel BOM Portal</title>
+<title>Mano's Basement</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 /* ── THEMES ─────────────────────────────────────────────── */
@@ -360,6 +360,22 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 .toast.amber{border-left-color:var(--amber)}
 @keyframes toastIn{from{transform:translateX(60px);opacity:0}to{transform:none;opacity:1}}
 
+/* ── TODO LIST ──────────────────────────────────────────── */
+.todo-add-row{display:flex;gap:8px;margin-bottom:10px}
+.todo-input{flex:1;max-width:none}
+.todo-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.todo-filters{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.todo-filter{padding:4px 12px;border:none;background:transparent;cursor:pointer;font-size:12px;color:var(--text3);font-family:inherit;transition:all .15s}
+.todo-filter.active{background:var(--surface3);color:var(--text);font-weight:600}
+.todo-filter:hover:not(.active){color:var(--text2)}
+.todo-list{display:flex;flex-direction:column;gap:4px}
+.todo-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;transition:opacity .15s}
+.todo-item.done{opacity:.55}
+.todo-cb{width:17px;height:17px;accent-color:var(--green);cursor:pointer;flex-shrink:0}
+.todo-text{flex:1;font-size:13.5px;color:var(--text)}
+.todo-item.done .todo-text{text-decoration:line-through;color:var(--text3)}
+.todo-date{font-size:11px;color:var(--text3);white-space:nowrap}
+
 /* ── PRINT ──────────────────────────────────────────────── */
 @media print{
   .app-hdr,.rpt-actions,.btn,.btn-icon,.row-actions{display:none!important}
@@ -372,7 +388,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
 
 <!-- ── HEADER ──────────────────────────────────────────── -->
 <header class="app-hdr">
-  <div class="logo"><div class="logo-dot"></div>PADEL BOM</div>
+  <div class="logo"><div class="logo-dot"></div>MANO'S BASEMENT</div>
 
   <nav class="tab-nav" id="tabNav" style="display:none">
     <button class="tab-btn active" id="tbtn-dashboard" onclick="setTab('dashboard')">📊 Dashboard</button>
@@ -380,6 +396,7 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
     <button class="tab-btn" id="tbtn-reports" onclick="setTab('reports')">📄 Reports</button>
     <button class="tab-btn" id="tbtn-inventory" onclick="setTab('inventory')">📦 Inventory</button>
     <button class="tab-btn" id="tbtn-trash" onclick="setTab('trash')">🗑 Trash</button>
+    <button class="tab-btn" id="tbtn-todo"  onclick="setTab('todo')">✅ Todo</button>
   </nav>
 
   <div class="hdr-right">
@@ -547,6 +564,27 @@ a.buy-btn:hover{opacity:.78;text-decoration:none}
       </table>
     </div>
     <div class="tbl-footer" id="trashTblFooter"></div>
+  </div>
+</div>
+
+<!-- TODO ─────────────────────────────────────────────── -->
+<div id="tab-todo" class="tab-content">
+  <div class="page-inner" style="max-width:740px">
+    <div class="todo-add-row">
+      <input type="text" id="todoInput" class="form-input todo-input" placeholder="Add a task… (Enter to add)" onkeydown="if(event.key==='Enter')addTodo()">
+      <button class="btn btn-primary" onclick="addTodo()">Add</button>
+    </div>
+    <div class="todo-toolbar">
+      <div class="todo-filters">
+        <button class="todo-filter active" id="tf-all"    onclick="setTodoFilter('all')">All</button>
+        <button class="todo-filter"        id="tf-active" onclick="setTodoFilter('active')">Active</button>
+        <button class="todo-filter"        id="tf-done"   onclick="setTodoFilter('done')">Done</button>
+      </div>
+      <span class="count-badge" id="todoCount"></span>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" id="clearDoneBtn" style="display:none" onclick="clearDoneTodos()">Clear done</button>
+    </div>
+    <div id="todoList"></div>
   </div>
 </div>
 
@@ -729,6 +767,8 @@ let sb      = null;
 let rows    = [];   // wishlist (bom_items)
 let invRows = [];   // inventory (owned items)
 let delRows = [];   // trash (deleted_items)
+let todoRows = [];  // todos
+let todoFilter = 'all';
 let sortCol = null, sortDir = 1;
 let invSortCol = null, invSortDir = 1;
 let editId = null, editTarget = 'wishlist';
@@ -831,7 +871,7 @@ async function connect(url, key, silent = false) {
 }
 
 function disconnect() {
-  sb = null; rows = []; invRows = []; delRows = []; selectedWishlist = new Set();
+  sb = null; rows = []; invRows = []; delRows = []; todoRows = []; selectedWishlist = new Set();
   localStorage.removeItem('bom-sb-url');
   localStorage.removeItem('bom-sb-key');
   document.getElementById('pinState').style.display     = 'flex';
@@ -867,6 +907,7 @@ async function loadItems() {
   renderDashboard();
   renderInventory();
   renderTrash();
+  loadTodos();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1259,6 +1300,7 @@ function setTab(name) {
   if (name === 'items')     renderItems();
   if (name === 'inventory') renderInventory();
   if (name === 'trash')     renderTrash();
+  if (name === 'todo')      renderTodos();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1844,8 +1886,80 @@ function showReport(type) {
 
 
 /* ═══════════════════════════════════════════════════════
-   COPY SCHEMA SQL
+   TODO LIST
 ═══════════════════════════════════════════════════════ */
+async function loadTodos() {
+  if (!sb) return;
+  const { data, error } = await sb.from('todos').select('*').order('created_at');
+  if (error) { console.warn('todos:', error.message); return; }
+  todoRows = data || [];
+  renderTodos();
+}
+
+function setTodoFilter(f) {
+  todoFilter = f;
+  ['all','active','done'].forEach(n =>
+    document.getElementById('tf-' + n)?.classList.toggle('active', n === f));
+  renderTodos();
+}
+
+function renderTodos() {
+  const list = document.getElementById('todoList');
+  const clearBtn = document.getElementById('clearDoneBtn');
+  const countEl  = document.getElementById('todoCount');
+  if (!list) return;
+  const hasDone = todoRows.some(t => t.done);
+  if (clearBtn) clearBtn.style.display = hasDone ? '' : 'none';
+  const active = todoRows.filter(t => !t.done).length;
+  if (countEl) countEl.textContent = active + ' left';
+  let filtered = todoRows;
+  if (todoFilter === 'active') filtered = todoRows.filter(t => !t.done);
+  if (todoFilter === 'done')   filtered = todoRows.filter(t =>  t.done);
+  if (!filtered.length) {
+    list.innerHTML = `<div class="inline-empty"><div class="icon">${todoFilter === 'done' ? '✅' : '📋'}</div><p>${todoFilter === 'done' ? 'No completed tasks' : 'No tasks yet — add one above!'}</p></div>`;
+    return;
+  }
+  list.innerHTML = `<div class="todo-list">${filtered.map(t => `
+    <div class="todo-item${t.done ? ' done' : ''}">
+      <input type="checkbox" class="todo-cb" ${t.done ? 'checked' : ''} onchange="toggleTodo(${t.id},this.checked)">
+      <span class="todo-text">${e(t.text)}</span>
+      <span class="todo-date">${new Date(t.created_at).toLocaleDateString()}</span>
+      <button class="btn-icon del" onclick="deleteTodo(${t.id})" title="Delete">✕</button>
+    </div>`).join('')}</div>`;
+}
+
+async function addTodo() {
+  const input = document.getElementById('todoInput');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+  input.value = '';
+  const { error } = await sb.from('todos').insert({ text });
+  if (error) { toast('Failed to add task', 'red'); return; }
+  await loadTodos();
+}
+
+async function toggleTodo(id, done) {
+  const { error } = await sb.from('todos').update({ done }).eq('id', id);
+  if (error) { toast('Update failed', 'red'); return; }
+  const t = todoRows.find(t => t.id === id);
+  if (t) t.done = done;
+  renderTodos();
+}
+
+async function deleteTodo(id) {
+  const { error } = await sb.from('todos').delete().eq('id', id);
+  if (error) { toast('Delete failed', 'red'); return; }
+  todoRows = todoRows.filter(t => t.id !== id);
+  renderTodos();
+}
+
+async function clearDoneTodos() {
+  const { error } = await sb.from('todos').delete().eq('done', true);
+  if (error) { toast('Failed to clear', 'red'); return; }
+  todoRows = todoRows.filter(t => !t.done);
+  renderTodos();
+}
+
 /* ═══════════════════════════════════════════════════════
    HTML ESCAPE
 ═══════════════════════════════════════════════════════ */
